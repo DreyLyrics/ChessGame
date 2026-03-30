@@ -1,21 +1,13 @@
 """
 Online/OnMatch.py
-Matchmaking + Online game session — kết nối server internet thật.
-
-Đọc SERVER_URL từ Online/config.py.
+Matchmaking + Online game — kết nối Railway server thật.
 """
 
 import pygame
 import sys
 import os
 import math
-import threading
 import time
-import logging
-logging.getLogger('engineio.client').setLevel(logging.ERROR)
-logging.getLogger('socketio.client').setLevel(logging.ERROR)
-logging.getLogger('engineio').setLevel(logging.ERROR)
-logging.getLogger('socketio').setLevel(logging.ERROR)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
@@ -29,9 +21,9 @@ from const  import *
 from game   import Game
 from square import Square
 from move   import Move
+from socket_client import SocketClient
 
 FPS = 60
-
 C_BG      = (18,  18,  30)
 C_BORDER  = (55,  55,  85)
 C_ACCENT  = (100, 160, 255)
@@ -61,73 +53,6 @@ def _move_to_uci(move) -> str:
             f'{cols[move.final.col]}{ROWS - move.final.row}')
 
 
-# ── Socket client ─────────────────────────────────────────────────────────────
-
-class _SocketClient:
-    """python-socketio client chạy trong thread riêng."""
-
-    def __init__(self, server_url: str):
-        import socketio as _sio
-        self.sio       = _sio.Client(reconnection=False, logger=False,
-                                     engineio_logger=False,
-                                     websocket_extra_options={'timeout': 10})
-        self._url      = server_url
-        self.connected = False
-        self._events: list = []
-        self._lock     = threading.Lock()
-
-        @self.sio.event
-        def connect():
-            self.connected = True
-
-        @self.sio.event
-        def disconnect():
-            self.connected = False
-
-        for ev in ('queued', 'match_found', 'game_started', 'opponent_move',
-                   'room_created', 'room_joined', 'room_updated', 'room_closed',
-                   'rooms_list', 'game_over', 'error'):
-            self._reg(ev)
-
-    def _reg(self, ev):
-        @self.sio.on(ev)
-        def _h(data=None):
-            with self._lock:
-                self._events.append((ev, data or {}))
-
-    def connect(self, timeout=8) -> bool:
-        threading.Thread(target=self._run, daemon=True).start()
-        deadline = time.time() + timeout
-        while not self.connected and time.time() < deadline:
-            time.sleep(0.05)
-        return self.connected
-
-    def _run(self):
-        try:
-            self.sio.connect(self._url, transports=['polling', 'websocket'])
-            self.sio.wait()
-        except Exception as e:
-            self.connected = False
-
-    def emit(self, event, data=None):
-        try:
-            self.sio.emit(event, data or {})
-        except Exception:
-            pass
-
-    def poll(self) -> list:
-        with self._lock:
-            evs = list(self._events)
-            self._events.clear()
-        return evs
-
-    def disconnect(self):
-        try:
-            self.sio.disconnect()
-        except Exception:
-            pass
-
-
 # ── Matchmaking ───────────────────────────────────────────────────────────────
 
 def launch_matchmaking(surface, screen_w, screen_h, username: str,
@@ -141,21 +66,22 @@ def launch_matchmaking(surface, screen_w, screen_h, username: str,
     f_small = pygame.font.SysFont('segoeui', 13)
     clock   = pygame.time.Clock()
 
-    # ── kết nối server ──
+    # bước 1: kết nối
     _draw_status(surface, screen_w, screen_h,
-                 f'Dang ket noi {SERVER_URL}...', 0, f_title, f_sub, f_small, None)
+                 'Dang ket noi server...', 0, f_title, f_sub, f_small, None)
     pygame.display.flip()
 
-    client = _SocketClient(SERVER_URL)
-    if not client.connect():
+    client = SocketClient(SERVER_URL)
+    if not client.connect(timeout=10):
         _show_error(surface, screen_w, screen_h,
                     'Khong the ket noi server!',
-                    f'Kiem tra: {SERVER_URL}', f_title, f_sub)
+                    SERVER_URL, f_title, f_sub)
         if on_menu: on_menu()
         return
 
-    # ── vào hàng đợi ──
+    # bước 2: vào hàng đợi
     client.emit('join_queue', {'username': username})
+
     start      = time.time()
     btn_cancel = pygame.Rect(screen_w//2 - 100, screen_h//2 + 120, 200, 44)
     running    = True
@@ -164,13 +90,12 @@ def launch_matchmaking(surface, screen_w, screen_h, username: str,
     while running:
         elapsed = time.time() - start
 
+        # poll tất cả event từ server
         for ev, data in client.poll():
             if ev == 'match_found':
                 match_data = data
                 running = False
                 break
-            elif ev == 'error':
-                pass   # bỏ qua lỗi nhỏ
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -200,10 +125,10 @@ def launch_matchmaking(surface, screen_w, screen_h, username: str,
         _run_online_game(
             surface, screen_w, screen_h,
             username,
-            opponent   = match_data.get('opponent', 'Unknown'),
-            my_color   = match_data.get('color', 'white'),
-            pin        = match_data.get('pin', ''),
-            client     = client,
+            opponent       = match_data.get('opponent', 'Unknown'),
+            my_color       = match_data.get('color', 'white'),
+            pin            = match_data.get('pin', ''),
+            client         = client,
             apply_settings = apply_settings,
         )
     elif client.connected:
@@ -217,7 +142,7 @@ def launch_matchmaking(surface, screen_w, screen_h, username: str,
 
 def _run_online_game(surface, screen_w, screen_h,
                      username, opponent, my_color, pin,
-                     client: _SocketClient,
+                     client: SocketClient,
                      apply_settings=None):
     pygame.font.init()
     f_info  = pygame.font.SysFont('segoeui', 15, bold=True)
@@ -239,7 +164,6 @@ def _run_online_game(surface, screen_w, screen_h,
     while True:
         now_player = game.next_player
 
-        # ── nhận event từ server ──
         for ev, data in client.poll():
             if ev == 'opponent_move':
                 gm = _uci_to_move(data.get('uci', ''))
@@ -253,18 +177,14 @@ def _run_online_game(surface, screen_w, screen_h,
                             board.set_true_en_passant(sq.piece)
                             game.play_sound(captured)
                             game.next_turn()
-            elif ev == 'game_over':
-                exit_signal = 'menu'
-            elif ev == 'room_closed':
+            elif ev in ('game_over', 'room_closed'):
                 exit_signal = 'menu'
 
-        # ── pygame events ──
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 client.emit('game_over', {'pin': pin, 'result': 'disconnect'})
                 client.disconnect()
                 return
-
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_ESCAPE, pygame.K_m):
                     client.emit('game_over', {'pin': pin, 'result': 'disconnect'})
@@ -286,8 +206,7 @@ def _run_online_game(surface, screen_w, screen_h,
                 dragger.update_mouse(event.pos)
                 r = (dragger.mouseY - BOARD_OFFSET_Y) // SQSIZE
                 c = (dragger.mouseX - BOARD_OFFSET_X) // SQSIZE
-                if not Square.in_range(r, c):
-                    continue
+                if not Square.in_range(r, c): continue
                 sq = board.squares[r][c]
                 if sq.has_piece() and sq.piece.color == my_color:
                     board.calc_moves(sq.piece, r, c, bool=True)
@@ -297,10 +216,8 @@ def _run_online_game(surface, screen_w, screen_h,
             elif event.type == pygame.MOUSEMOTION:
                 r = (event.pos[1] - BOARD_OFFSET_Y) // SQSIZE
                 c = (event.pos[0] - BOARD_OFFSET_X) // SQSIZE
-                if Square.in_range(r, c):
-                    game.set_hover(r, c)
-                if dragger.dragging:
-                    dragger.update_mouse(event.pos)
+                if Square.in_range(r, c): game.set_hover(r, c)
+                if dragger.dragging: dragger.update_mouse(event.pos)
 
             elif event.type == pygame.MOUSEBUTTONUP:
                 if dragger.dragging:
@@ -317,8 +234,7 @@ def _run_online_game(surface, screen_w, screen_h,
                             game.play_sound(captured)
                             game.next_turn()
                             client.emit('move', {
-                                'pin':      pin,
-                                'uci':      _move_to_uci(mv),
+                                'pin': pin, 'uci': _move_to_uci(mv),
                                 'username': username,
                             })
                 dragger.undrag_piece()
@@ -326,14 +242,10 @@ def _run_online_game(surface, screen_w, screen_h,
         if exit_signal:
             break
 
-        # ── draw ──
         surface.fill((18, 18, 30))
-        game.show_bg(surface)
-        game.show_last_move(surface)
-        game.show_moves(surface)
-        game.show_pieces(surface)
-        game.show_hover(surface)
-        game.show_check(surface)
+        game.show_bg(surface);       game.show_last_move(surface)
+        game.show_moves(surface);    game.show_pieces(surface)
+        game.show_hover(surface);    game.show_check(surface)
         if dragger.dragging:
             dragger.update_blit(surface, game._img_cache)
         game.show_turn_panel(surface)
@@ -344,7 +256,7 @@ def _run_online_game(surface, screen_w, screen_h,
         if game.is_over:
             game.show_gameover(surface)
             hint = f_small.render('Bam ESC de ve menu', True, C_DIM)
-            surface.blit(hint, hint.get_rect(centerx=screen_w//2, y=screen_h - 30))
+            surface.blit(hint, hint.get_rect(centerx=screen_w//2, y=screen_h-30))
 
         pygame.display.flip()
         clock.tick(FPS)
@@ -359,12 +271,9 @@ def _draw_status(surface, sw, sh, msg, elapsed, f_title, f_sub, f_small, btn_can
     surface.fill(C_BG)
     lbl = f_title.render(msg, True, C_ACCENT)
     surface.blit(lbl, lbl.get_rect(center=(sw//2, sh//2 - 80)))
-
     if elapsed > 0:
         t_lbl = f_sub.render(f'Thoi gian cho: {int(elapsed)}s', True, C_DIM)
         surface.blit(t_lbl, t_lbl.get_rect(center=(sw//2, sh//2 - 35)))
-
-    # spinner
     cx, cy = sw//2, sh//2 + 30
     t = elapsed * 3
     for i in range(8):
@@ -374,7 +283,6 @@ def _draw_status(surface, sw, sh, msg, elapsed, f_title, f_sub, f_small, btn_can
         s   = pygame.Surface((8, 8), pygame.SRCALPHA)
         pygame.draw.circle(s, (*C_ACCENT, int(255 * i / 8)), (4, 4), 4)
         surface.blit(s, (sx - 4, sy - 4))
-
     if btn_cancel:
         mouse = pygame.mouse.get_pos()
         bc = (90, 55, 55) if btn_cancel.collidepoint(mouse) else (60, 38, 38)
@@ -424,17 +332,14 @@ def _draw_hud(surface, sw, sh, me, opp, my_color, now_player, f_info, f_small):
     bg  = pygame.Surface((280, 60), pygame.SRCALPHA)
     bg.fill((0, 0, 0, 130))
     surface.blit(bg, (pad, pad))
-
     me_c  = C_ACCENT if now_player == my_color else C_DIM
     opp_c = C_ACCENT if now_player != my_color else C_DIM
     mc    = '♔' if my_color == 'white' else '♚'
     oc    = '♚' if my_color == 'white' else '♔'
-
     me_s  = f_info.render(f'{mc} {me} (ban)', True, me_c)
     opp_s = f_small.render(f'{oc} {opp}', True, opp_c)
     surface.blit(me_s,  (pad + 8, pad + 6))
     surface.blit(opp_s, (pad + 8, pad + 30))
-
     if now_player == my_color:
         ts = f_small.render('▶ Luot cua ban', True, C_SUCCESS)
     else:

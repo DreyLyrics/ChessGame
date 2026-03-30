@@ -19,7 +19,7 @@ from LoginAndResgister import (
     C_PANEL, C_PANEL2, C_BORDER, C_ACCENT,
     C_TEXT, C_TEXT_DIM, C_OVERLAY, C_SUCCESS, C_ERROR, Button,
 )
-from OnMatch import _SocketClient
+from socket_client import SocketClient
 
 C_HOST_COLOR = (255, 215,  80)
 C_GUEST_COLOR= (100, 200, 255)
@@ -37,7 +37,7 @@ class CreateMatch:
 
     def __init__(self, screen_w, screen_h, pin: str, host: str,
                  username: str, display_name: str = '',
-                 client: _SocketClient = None):
+                 client: SocketClient = None):
         self.screen_w     = screen_w
         self.screen_h     = screen_h
         self.pin          = pin

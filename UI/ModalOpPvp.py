@@ -23,7 +23,7 @@ from LoginAndResgister import (
     C_TEXT, C_TEXT_DIM, C_OVERLAY, C_SUCCESS, C_ERROR,
     InputField, Button,
 )
-from OnMatch import _SocketClient
+from socket_client import SocketClient
 
 C_CREATE_BG  = ( 50, 160, 100)
 C_CREATE_HOV = ( 70, 200, 130)
@@ -47,7 +47,7 @@ class ModalOpPvp:
         self._msg_ok      = False
 
         # socket client
-        self._client: _SocketClient | None = None
+        self._client: SocketClient | None = None
         self._my_pin   = None
         self._rooms    = []      # list từ server
         self._connected = False
@@ -63,8 +63,8 @@ class ModalOpPvp:
 
     def _connect(self):
         from server_config import SERVER_URL
-        c = _SocketClient(SERVER_URL)
-        if c.connect(timeout=8):
+        c = SocketClient(SERVER_URL)
+        if c.connect(timeout=10):
             self._client    = c
             self._connected = True
             c.emit('get_rooms')
