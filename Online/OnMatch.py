@@ -14,6 +14,8 @@ import time
 import logging
 logging.getLogger('engineio.client').setLevel(logging.ERROR)
 logging.getLogger('socketio.client').setLevel(logging.ERROR)
+logging.getLogger('engineio').setLevel(logging.ERROR)
+logging.getLogger('socketio').setLevel(logging.ERROR)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
