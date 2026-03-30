@@ -1,7 +1,6 @@
 """
 LocalBattle/LocalBattle.py
 Chế độ Local — 2 người chơi trên cùng 1 máy.
-Chạy src/main.py trực tiếp, không thay đổi gì thêm.
 """
 
 import sys
