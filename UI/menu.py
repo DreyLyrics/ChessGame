@@ -277,30 +277,26 @@ class MenuScreen:
                     op_result = op_modal.run(self.screen)
                     if op_result and isinstance(op_result, dict):
                         from CreateMatch import CreateMatch
+                        client = op_result.get('client')
                         cm = CreateMatch(
                             self.W, self.H,
                             pin=op_result['pin'],
                             host=op_result['host'],
                             username=uname,
-                            display_name=dname)
+                            display_name=dname,
+                            client=client)
                         cm_result = cm.run(self.screen)
                         if cm_result == 'start':
-                            # random màu và bắt đầu game
-                            import random as _rnd
-                            my_color = _rnd.choice(['white', 'black'])
                             _ONLINE = os.path.join(os.path.dirname(_UI_DIR), 'Online')
                             if _ONLINE not in sys.path:
                                 sys.path.insert(0, _ONLINE)
                             from OnMatch import _run_online_game
-                            session = {
-                                'id': op_result['pin'],
-                                'p1': uname, 'p2': '',
-                                'color_p1': my_color,
-                                'color_p2': 'black' if my_color == 'white' else 'white',
-                                'moves': [], 'result': None,
-                            }
-                            _run_online_game(self.screen, self.W, self.H,
-                                             uname, session, my_color)
+                            my_color = cm._game_color or 'white'
+                            opponent = cm._guest if cm.is_host else cm.host
+                            _run_online_game(
+                                self.screen, self.W, self.H,
+                                uname, opponent, my_color,
+                                op_result['pin'], client)
             if self.btn_pve.handle_event(event):
                 self.result = 'pve'
             if self.btn_local.handle_event(event):
