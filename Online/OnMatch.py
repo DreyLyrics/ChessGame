@@ -11,6 +11,9 @@ import os
 import math
 import threading
 import time
+import logging
+logging.getLogger('engineio.client').setLevel(logging.ERROR)
+logging.getLogger('socketio.client').setLevel(logging.ERROR)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
@@ -64,7 +67,8 @@ class _SocketClient:
     def __init__(self, server_url: str):
         import socketio as _sio
         self.sio       = _sio.Client(reconnection=False, logger=False,
-                                     engineio_logger=False)
+                                     engineio_logger=False,
+                                     websocket_extra_options={'timeout': 10})
         self._url      = server_url
         self.connected = False
         self._events: list = []
@@ -98,7 +102,7 @@ class _SocketClient:
 
     def _run(self):
         try:
-            self.sio.connect(self._url, transports=['websocket', 'polling'])
+            self.sio.connect(self._url, transports=['polling', 'websocket'])
             self.sio.wait()
         except Exception as e:
             self.connected = False
