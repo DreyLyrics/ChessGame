@@ -95,6 +95,9 @@ class CreateMatch:
                 for ev, data in self._client.poll():
                     if ev == 'room_updated':
                         self._guest = data.get('guest', '')
+                    elif ev == 'room_joined':
+                        # guest nhận event này khi join thành công
+                        self._guest = data.get('guest', '')
                     elif ev == 'game_started':
                         self._game_color = data.get('color', 'white')
                         self._result = 'start'

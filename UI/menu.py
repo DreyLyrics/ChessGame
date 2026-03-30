@@ -277,11 +277,15 @@ class MenuScreen:
                     op_result = op_modal.run(self.screen)
                     if op_result and isinstance(op_result, dict):
                         from CreateMatch import CreateMatch
-                        client = op_result.get('client')
+                        client   = op_result.get('client')
+                        pin      = op_result['pin']
+                        host     = op_result['host']
+                        # người join: host là chủ phòng, không phải mình
+                        is_guest = (op_result.get('action') == 'join')
                         cm = CreateMatch(
                             self.W, self.H,
-                            pin=op_result['pin'],
-                            host=op_result['host'],
+                            pin=pin,
+                            host=host,
                             username=uname,
                             display_name=dname,
                             client=client)
@@ -292,11 +296,11 @@ class MenuScreen:
                                 sys.path.insert(0, _ONLINE)
                             from OnMatch import _run_online_game
                             my_color = cm._game_color or 'white'
-                            opponent = cm._guest if cm.is_host else cm.host
+                            # host thấy guest, guest thấy host
+                            opponent = cm._guest if not is_guest else host
                             _run_online_game(
                                 self.screen, self.W, self.H,
-                                uname, opponent, my_color,
-                                op_result['pin'], client)
+                                uname, opponent, my_color, pin, client)
             if self.btn_pve.handle_event(event):
                 self.result = 'pve'
             if self.btn_local.handle_event(event):

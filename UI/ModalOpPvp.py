@@ -1,9 +1,6 @@
 """
 UI/ModalOpPvp.py
 Modal tuỳ chỉnh trận PVP — kết nối Railway server thật.
-  - Tạo phòng mới → server sinh PIN
-  - Tìm phòng bằng PIN → join qua socket
-  - Danh sách phòng lấy từ server
 """
 
 import pygame
@@ -24,6 +21,7 @@ from LoginAndResgister import (
     InputField, Button,
 )
 from socket_client import SocketClient
+from server_config import SERVER_URL   # import sớm để bắt lỗi ngay
 
 C_CREATE_BG  = ( 50, 160, 100)
 C_CREATE_HOV = ( 70, 200, 130)
@@ -46,31 +44,32 @@ class ModalOpPvp:
         self._msg         = ''
         self._msg_ok      = False
 
-        # socket client
         self._client: SocketClient | None = None
-        self._my_pin   = None
-        self._rooms    = []      # list từ server
-        self._connected = False
+        self._my_pin    = None
+        self._rooms     = []
+        self._connected  = False
         self._connecting = True
+        self._connect_err = ''
 
         self._init_fonts()
         self._build()
         self._overlay = pygame.Surface((screen_w, screen_h), pygame.SRCALPHA)
         self._overlay.fill(C_OVERLAY)
 
-        # kết nối server trong thread
-        threading.Thread(target=self._connect, daemon=True).start()
+        # kết nối ngay trong thread — dùng SERVER_URL đã import ở trên
+        threading.Thread(target=self._connect, args=(SERVER_URL,), daemon=True).start()
 
-    def _connect(self):
-        from server_config import SERVER_URL
-        c = SocketClient(SERVER_URL)
-        if c.connect(timeout=10):
-            self._client    = c
-            self._connected = True
-            c.emit('get_rooms')
-        else:
-            self._msg    = 'Khong the ket noi server!'
-            self._msg_ok = False
+    def _connect(self, url):
+        try:
+            c = SocketClient(url)
+            if c.connect(timeout=10):
+                self._client    = c
+                self._connected = True
+                c.emit('get_rooms')
+            else:
+                self._connect_err = f'Timeout ket noi: {url}'
+        except Exception as e:
+            self._connect_err = str(e)
         self._connecting = False
 
     def _init_fonts(self):
@@ -86,8 +85,7 @@ class ModalOpPvp:
         mx = self.screen_w // 2 - self.W // 2
         my = self.screen_h // 2 - self.H // 2
         self.panel_rect = pygame.Rect(mx, my, self.W, self.H)
-        pad = 28
-        iw  = self.W - pad * 2
+        pad = 28; iw = self.W - pad * 2
         self.btn_close = pygame.Rect(mx + self.W - 36, my + 10, 26, 26)
         self.field_pin = InputField(
             mx + pad, my + 72, iw - 110, 40,
@@ -108,8 +106,8 @@ class ModalOpPvp:
         self._result = ...
         self._open_t = pygame.time.get_ticks()
         clock = pygame.time.Clock()
+
         while self._result is ...:
-            # poll socket events
             if self._client:
                 for ev, data in self._client.poll():
                     if ev == 'room_created':
@@ -118,17 +116,24 @@ class ModalOpPvp:
                         self._msg_ok = True
                         self._client.emit('get_rooms')
                     elif ev == 'room_joined':
-                        pin  = data.get('pin', '')
-                        host = data.get('host', '')
+                        # người thứ 2 join thành công → vào CreateMatch
                         self._result = {
-                            'action': 'join', 'pin': pin,
-                            'host': host, 'client': self._client,
+                            'action':  'join',
+                            'pin':     data.get('pin', ''),
+                            'host':    data.get('host', ''),
+                            'client':  self._client,
                         }
                     elif ev == 'rooms_list':
                         self._rooms = data.get('rooms', [])
                     elif ev == 'error':
-                        self._msg    = data.get('msg', 'Loi')
+                        self._msg    = data.get('msg', 'Loi server')
                         self._msg_ok = False
+
+            # hiện lỗi kết nối nếu có
+            if self._connect_err and not self._connecting:
+                self._msg    = self._connect_err[:60]
+                self._msg_ok = False
+                self._connect_err = ''
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -138,12 +143,14 @@ class ModalOpPvp:
             self._draw(surface)
             pygame.display.flip()
             clock.tick(60)
+
         return self._result
 
     def _cleanup(self):
         if self._client and self._my_pin:
             self._client.emit('leave_room', {'pin': self._my_pin,
                                              'username': self.username})
+        # không disconnect nếu result hợp lệ (client sẽ dùng tiếp)
         if self._client and self._result is None:
             self._client.disconnect()
 
@@ -155,9 +162,7 @@ class ModalOpPvp:
                 self._cleanup(); self._result = None; return
             if not self.panel_rect.collidepoint(event.pos):
                 self._cleanup(); self._result = None; return
-            # click row phòng
-            row_h = 44
-            lr = self._list_rect
+            row_h = 44; lr = self._list_rect
             for i, room in enumerate(self._rooms[:8]):
                 ry = lr.y + i * row_h
                 if pygame.Rect(lr.x, ry, lr.w, row_h - 2).collidepoint(event.pos):
@@ -174,15 +179,18 @@ class ModalOpPvp:
             self._msg = 'Vui long nhap ma PIN'; self._msg_ok = False; return
         if not self._client:
             self._msg = 'Chua ket noi server'; self._msg_ok = False; return
+        self._msg = f'Dang vao phong {pin}...'; self._msg_ok = True
         self._client.emit('join_room', {'pin': pin, 'username': self.username})
 
     def _do_create(self):
         if not self._client:
             self._msg = 'Chua ket noi server'; self._msg_ok = False; return
         if self._my_pin:
+            # đã tạo phòng rồi → vào CreateMatch luôn
             self._result = {'action': 'create', 'pin': self._my_pin,
                             'host': self.username, 'client': self._client}
             return
+        self._msg = 'Dang tao phong...'; self._msg_ok = True
         self._client.emit('create_room', {'username': self.username})
 
     # ── draw ──────────────────────────────────────────────────────────────────
@@ -204,8 +212,7 @@ class ModalOpPvp:
 
     def _draw_panel(self, surface, ox, oy):
         pr = pygame.Rect(ox, oy, self.W, self.H)
-        dx = ox - self.panel_rect.x
-        dy = oy - self.panel_rect.y
+        dx = ox - self.panel_rect.x; dy = oy - self.panel_rect.y
         sh = pygame.Surface((self.W+20, self.H+20), pygame.SRCALPHA)
         sh.fill((0,0,0,80)); surface.blit(sh, (ox-10, oy+10))
         pygame.draw.rect(surface, C_PANEL, pr, border_radius=16)
@@ -217,11 +224,11 @@ class ModalOpPvp:
 
         # trạng thái kết nối
         if self._connecting:
-            st = self.f_small.render('Dang ket noi server...', True, C_TEXT_DIM)
+            st = self.f_small.render('⏳ Dang ket noi...', True, C_TEXT_DIM)
         elif self._connected:
-            st = self.f_small.render('● Da ket noi', True, C_SUCCESS)
+            st = self.f_small.render('● Da ket noi Railway', True, C_SUCCESS)
         else:
-            st = self.f_small.render('● Mat ket noi', True, C_ERROR)
+            st = self.f_small.render('● Mat ket noi server', True, C_ERROR)
         surface.blit(st, (ox + 12, oy + 16))
 
         cr = self.btn_close.move(dx, dy)
@@ -255,16 +262,16 @@ class ModalOpPvp:
             pin_bg = pygame.Rect(ox+pad, oy+200, self.W-pad*2, 26)
             pygame.draw.rect(surface, C_PANEL2, pin_bg, border_radius=6)
             pin_lbl = self.f_label.render(
-                f'Ma PIN: {self._my_pin}  (cho nguoi choi vao...)', True, C_SUCCESS)
+                f'Ma PIN: {self._my_pin}  — chia se cho ban be', True, C_SUCCESS)
             surface.blit(pin_lbl, pin_lbl.get_rect(center=pin_bg.center))
         elif self._msg:
             c = C_SUCCESS if self._msg_ok else C_ERROR
             ml = self.f_label.render(self._msg, True, c)
             surface.blit(ml, ml.get_rect(centerx=ox+self.W//2, y=oy+200))
 
-        # danh sách phòng từ server
+        # danh sách phòng
         list_y = oy + (self._list_rect.y - self.panel_rect.y)
-        hdr = self.f_label.render('Phong dang mo (tu server):', True, C_TEXT_DIM)
+        hdr = self.f_label.render('Phong dang mo:', True, C_TEXT_DIM)
         surface.blit(hdr, (ox+pad, list_y - 18))
 
         row_h  = 44
