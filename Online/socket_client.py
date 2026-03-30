@@ -1,9 +1,10 @@
 """
 Online/socket_client.py
-Wrapper mỏng quanh python-socketio — dùng chung cho OnMatch và ModalOpPvp.
+Thread-safe socket client dùng queue.Queue — không bao giờ mất event.
 """
 
 import threading
+import queue
 import time
 import logging
 
@@ -14,8 +15,6 @@ logging.getLogger('socketio').setLevel(logging.ERROR)
 
 
 class SocketClient:
-    """python-socketio client chạy trong thread riêng."""
-
     EVENTS = (
         'queued', 'match_found', 'game_started', 'opponent_move',
         'room_created', 'room_joined', 'room_updated', 'room_closed',
@@ -24,12 +23,11 @@ class SocketClient:
 
     def __init__(self, server_url: str):
         import socketio as _sio
-        self.sio        = _sio.Client(reconnection=False, logger=False,
-                                      engineio_logger=False)
-        self._url       = server_url
-        self.connected  = False
-        self._events: list = []
-        self._lock      = threading.Lock()
+        self.sio       = _sio.Client(reconnection=False, logger=False,
+                                     engineio_logger=False)
+        self._url      = server_url
+        self.connected = False
+        self._q        = queue.Queue()   # thread-safe, không bao giờ mất event
 
         @self.sio.event
         def connect():
@@ -45,8 +43,7 @@ class SocketClient:
     def _reg(self, ev):
         @self.sio.on(ev)
         def _h(data=None):
-            with self._lock:
-                self._events.append((ev, data or {}))
+            self._q.put((ev, data or {}))   # put vào queue, không bao giờ mất
 
     def connect(self, timeout=10) -> bool:
         threading.Thread(target=self._run, daemon=True).start()
@@ -70,10 +67,35 @@ class SocketClient:
             pass
 
     def poll(self) -> list:
-        with self._lock:
-            evs = list(self._events)
-            self._events.clear()
+        """Lấy tất cả event hiện có, không block."""
+        evs = []
+        while True:
+            try:
+                evs.append(self._q.get_nowait())
+            except queue.Empty:
+                break
         return evs
+
+    def wait_for(self, event_name: str, timeout: float = 60) -> dict | None:
+        """Block cho đến khi nhận được event cụ thể. Các event khác vẫn được giữ lại."""
+        deadline = time.time() + timeout
+        pending  = []   # event chưa phải event cần tìm
+        while time.time() < deadline:
+            try:
+                ev, data = self._q.get(timeout=0.1)
+                if ev == event_name:
+                    # đưa các event pending trở lại queue
+                    for item in pending:
+                        self._q.put(item)
+                    return data
+                else:
+                    pending.append((ev, data))
+            except queue.Empty:
+                continue
+        # timeout — đưa pending trở lại
+        for item in pending:
+            self._q.put(item)
+        return None
 
     def disconnect(self):
         try:

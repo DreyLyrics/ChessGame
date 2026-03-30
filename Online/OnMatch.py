@@ -53,6 +53,8 @@ def _move_to_uci(move) -> str:
             f'{cols[move.final.col]}{ROWS - move.final.row}')
 
 
+# ── Matchmaking ───────────────────────────────────────────────────────────────
+
 def launch_matchmaking(surface, screen_w, screen_h, username: str,
                        on_menu=None, apply_settings=None):
     from server_config import SERVER_URL
@@ -76,51 +78,36 @@ def launch_matchmaking(surface, screen_w, screen_h, username: str,
 
     client.emit('join_queue', {'username': username})
 
+    # wait_for chạy trong thread riêng để không block UI
+    match_data  = [None]
+    match_ready = threading.Event()
+    cancelled   = threading.Event()
+
+    def _wait():
+        data = client.wait_for('match_found', timeout=300)
+        if data and not cancelled.is_set():
+            match_data[0] = data
+        match_ready.set()
+
+    threading.Thread(target=_wait, daemon=True).start()
+
     start      = time.time()
     btn_cancel = pygame.Rect(screen_w//2 - 100, screen_h//2 + 120, 200, 44)
-    match_data = None
-    match_evt  = threading.Event()
 
-    # thread riêng poll match_found — tránh bỏ sót event khi polling HTTP
-    def _poll_match():
-        nonlocal match_data
-        while not match_evt.is_set():
-            for ev, data in client.poll():
-                if ev == 'match_found':
-                    match_data = data
-                    match_evt.set()
-                    return
-            time.sleep(0.08)
-
-    threading.Thread(target=_poll_match, daemon=True).start()
-
-    running = True
-    while running:
+    while not match_ready.is_set():
         elapsed = time.time() - start
-
-        if match_evt.is_set():
-            break
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                match_evt.set()
-                client.emit('leave_queue')
-                client.disconnect()
-                running = False
+                cancelled.set(); match_ready.set()
+                client.emit('leave_queue'); client.disconnect()
             if event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE, pygame.K_m):
-                match_evt.set()
-                client.emit('leave_queue')
-                client.disconnect()
-                running = False
+                cancelled.set(); match_ready.set()
+                client.emit('leave_queue'); client.disconnect()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if btn_cancel.collidepoint(event.pos):
-                    match_evt.set()
-                    client.emit('leave_queue')
-                    client.disconnect()
-                    running = False
-
-        if not running:
-            break
+                    cancelled.set(); match_ready.set()
+                    client.emit('leave_queue'); client.disconnect()
 
         _draw_status(surface, screen_w, screen_h,
                      'Dang tim doi thu...', elapsed,
@@ -128,13 +115,13 @@ def launch_matchmaking(surface, screen_w, screen_h, username: str,
         pygame.display.flip()
         clock.tick(FPS)
 
-    if match_data:
+    if match_data[0] and not cancelled.is_set():
         _run_online_game(
             surface, screen_w, screen_h,
             username,
-            opponent       = match_data.get('opponent', 'Unknown'),
-            my_color       = match_data.get('color', 'white'),
-            pin            = match_data.get('pin', ''),
+            opponent       = match_data[0].get('opponent', 'Unknown'),
+            my_color       = match_data[0].get('color', 'white'),
+            pin            = match_data[0].get('pin', ''),
             client         = client,
             apply_settings = apply_settings,
         )
@@ -144,6 +131,8 @@ def launch_matchmaking(surface, screen_w, screen_h, username: str,
     if on_menu:
         on_menu()
 
+
+# ── Online game loop ──────────────────────────────────────────────────────────
 
 def _run_online_game(surface, screen_w, screen_h,
                      username, opponent, my_color, pin,
@@ -164,69 +153,40 @@ def _run_online_game(surface, screen_w, screen_h,
     _show_color_announce(surface, screen_w, screen_h,
                          'Trang ♔' if my_color == 'white' else 'Den ♚')
 
-    # thread poll opponent_move riêng để không bỏ sót
-    pending_moves = []
-    move_lock     = threading.Lock()
-    game_over_flag = threading.Event()
-
-    def _poll_game():
-        while not game_over_flag.is_set():
-            for ev, data in client.poll():
-                if ev == 'opponent_move':
-                    with move_lock:
-                        pending_moves.append(data.get('uci', ''))
-                elif ev in ('game_over', 'room_closed'):
-                    game_over_flag.set()
-            time.sleep(0.08)
-
-    threading.Thread(target=_poll_game, daemon=True).start()
-
     exit_signal = None
 
     while True:
         now_player = game.next_player
 
-        # áp dụng nước đi đối thủ
-        with move_lock:
-            moves_to_apply = list(pending_moves)
-            pending_moves.clear()
-
-        for uci in moves_to_apply:
-            gm = _uci_to_move(uci)
-            if gm:
-                sq = board.squares[gm.initial.row][gm.initial.col]
-                if sq.has_piece():
-                    board.calc_moves(sq.piece, gm.initial.row, gm.initial.col, bool=True)
-                    if board.valid_move(sq.piece, gm):
-                        captured = board.squares[gm.final.row][gm.final.col].has_piece()
-                        board.move(sq.piece, gm)
-                        board.set_true_en_passant(sq.piece)
-                        game.play_sound(captured)
-                        game.next_turn()
-
-        if game_over_flag.is_set() and not game.is_over:
-            exit_signal = 'menu'
+        # poll tất cả event — queue đảm bảo không mất
+        for ev, data in client.poll():
+            if ev == 'opponent_move':
+                gm = _uci_to_move(data.get('uci', ''))
+                if gm:
+                    sq = board.squares[gm.initial.row][gm.initial.col]
+                    if sq.has_piece():
+                        board.calc_moves(sq.piece, gm.initial.row, gm.initial.col, bool=True)
+                        if board.valid_move(sq.piece, gm):
+                            captured = board.squares[gm.final.row][gm.final.col].has_piece()
+                            board.move(sq.piece, gm)
+                            board.set_true_en_passant(sq.piece)
+                            game.play_sound(captured)
+                            game.next_turn()
+            elif ev in ('game_over', 'room_closed'):
+                exit_signal = 'menu'
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                game_over_flag.set()
                 client.emit('game_over', {'pin': pin, 'result': 'disconnect'})
-                client.disconnect()
-                return
+                client.disconnect(); return
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_ESCAPE, pygame.K_m):
-                    game_over_flag.set()
                     client.emit('game_over', {'pin': pin, 'result': 'disconnect'})
-                    client.disconnect()
-                    exit_signal = 'menu'
-                    break
+                    client.disconnect(); exit_signal = 'menu'; break
 
             if game.is_over:
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    game_over_flag.set()
-                    client.disconnect()
-                    exit_signal = 'menu'
-                    break
+                    client.disconnect(); exit_signal = 'menu'; break
                 continue
 
             if now_player != my_color:
@@ -291,10 +251,11 @@ def _run_online_game(surface, screen_w, screen_h,
         pygame.display.flip()
         clock.tick(FPS)
 
-    game_over_flag.set()
     if client.connected:
         client.disconnect()
 
+
+# ── UI helpers ────────────────────────────────────────────────────────────────
 
 def _draw_status(surface, sw, sh, msg, elapsed, f_title, f_sub, f_small, btn_cancel):
     surface.fill(C_BG)
