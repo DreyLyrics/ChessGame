@@ -126,7 +126,7 @@ class _SocketClient:
 
 def launch_matchmaking(surface, screen_w, screen_h, username: str,
                        on_menu=None, apply_settings=None):
-    from config import SERVER_URL
+    from server_config import SERVER_URL
 
     pygame.font.init()
     f_title = pygame.font.SysFont('segoeui', 26, bold=True)
