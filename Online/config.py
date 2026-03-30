@@ -15,6 +15,6 @@ SERVER_URL = 'https://YOUR-APP.railway.app'
 import os
 if os.environ.get('CHESS_SERVER_URL'):
     SERVER_URL = os.environ['CHESS_SERVER_URL']
-elif SERVER_URL == 'https://YOUR-APP.railway.app':
+elif SERVER_URL == 'https://web-production-0f37b.up.railway.app/':
     # Chưa cấu hình → dùng localhost
-    SERVER_URL = 'http://localhost:5000'
+    SERVER_URL = 'http://localhost:8080/status'
