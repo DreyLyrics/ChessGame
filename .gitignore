@@ -1,0 +1,33 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# PyInstaller build output
+App/dist/
+App/build/
+*.spec
+
+# Database (dữ liệu local, không push lên)
+DataBase/chess.db
+database/chess.db
+*.db
+
+# Stockfish binary (file lớn, không cần push)
+stockfish/*.exe
+stockfish/stockfish-windows-x86-64-avx2.exe
+
+# egg-info
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Env
+.env
