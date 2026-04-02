@@ -146,82 +146,26 @@ class BotMain:
         self._thinking    = False
 
     def _map_pos(self, pos):
-        """Nếu bàn cờ bị flip (người chơi Đen), đảo tọa độ chuột trong vùng bàn cờ."""
-        x, y = pos
-        if self.HUMAN_COLOR == 'black':
-            # chỉ flip nếu click trong vùng bàn cờ
-            bx = BOARD_OFFSET_X
-            by = BOARD_OFFSET_Y
-            if bx <= x <= bx + BOARD_W and by <= y <= by + BOARD_H:
-                x = bx + BOARD_W - (x - bx)
-                y = by + BOARD_H - (y - by)
-        return (x, y)
+        """Không flip — tọa độ chuột giữ nguyên."""
+        return pos
 
     def _draw_frame(self):
         g = self.game
         s = self.screen
         s.fill((18, 18, 30))
 
-        if self.HUMAN_COLOR == 'black':
-            # --- bàn cờ flip: vẽ nền + last_move + moves lên buffer rồi rotate ---
-            buf = pygame.Surface((BOARD_W, BOARD_H))
-            buf.fill((18, 18, 30))
-
-            # vẽ nền vào buffer (tạm blit vào screen rồi copy)
-            g.show_bg(s)
-            g.show_last_move(s)
-            g.show_moves(s)
-
-            # copy vùng bàn cờ từ screen vào buffer
-            board_area = s.subsurface(
-                pygame.Rect(BOARD_OFFSET_X, BOARD_OFFSET_Y, BOARD_W, BOARD_H)
-            ).copy()
-            # rotate 180° → Đen ở dưới
-            flipped = pygame.transform.rotate(board_area, 180)
-            s.blit(flipped, (BOARD_OFFSET_X, BOARD_OFFSET_Y))
-
-            # vẽ quân cờ với tọa độ đảo nhưng icon giữ nguyên chiều
-            self._draw_pieces_flipped(s)
-
-            # vẽ quân đang kéo (vị trí chuột thật, không flip)
-            if g.dragger.dragging:
-                g.dragger.update_blit(s, g._img_cache)
-
-            g.show_hover(s)
-            g.show_check(s)
-        else:
-            # --- bình thường ---
-            g.show_bg(s);       g.show_last_move(s)
-            g.show_moves(s);    g.show_pieces(s)
-            g.show_hover(s);    g.show_check(s)
-            if g.dragger.dragging:
-                g.dragger.update_blit(s, g._img_cache)
+        # Luôn vẽ bình thường — không flip dù là quân Đen
+        g.show_bg(s);       g.show_last_move(s)
+        g.show_moves(s);    g.show_pieces(s)
+        g.show_hover(s);    g.show_check(s)
+        if g.dragger.dragging:
+            g.dragger.update_blit(s, g._img_cache)
 
         g.show_turn_panel(s)
         g.show_sidebar(s)
         g.show_alert(s)
         if g.is_over:
             self._btn_reset, self._btn_menu = g.show_gameover(s)
-
-    def _draw_pieces_flipped(self, surface):
-        """Vẽ quân cờ với bàn cờ đã flip — row/col đảo, icon giữ nguyên."""
-        g   = self.game
-        ox  = BOARD_OFFSET_X
-        oy  = BOARD_OFFSET_Y
-        for row in range(ROWS):
-            for col in range(COLS):
-                sq = g.board.squares[row][col]
-                if sq.has_piece() and sq.piece is not g.dragger.piece:
-                    piece = sq.piece
-                    piece.set_texture(size=80)
-                    img = g._load_img(piece.texture)
-                    # đảo vị trí: row → 7-row, col → 7-col
-                    draw_row = ROWS - 1 - row
-                    draw_col = COLS - 1 - col
-                    cx = ox + draw_col * SQSIZE + SQSIZE // 2
-                    cy = oy + draw_row * SQSIZE + SQSIZE // 2
-                    piece.texture_rect = img.get_rect(center=(cx, cy))
-                    surface.blit(img, piece.texture_rect)
 
     # ── bot ───────────────────────────────────────────────────────────────────
 
