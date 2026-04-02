@@ -44,8 +44,8 @@ from flask_socketio import SocketIO, emit, join_room as sio_join, leave_room as 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'chess_secret_2024')
 
-# eventlet hoặc gevent cho production; threading cho dev
-_async_mode = 'eventlet' if os.environ.get('RAILWAY_ENVIRONMENT') else 'threading'
+# gevent cho production (eventlet deprecated); threading cho dev
+_async_mode = 'gevent' if os.environ.get('RAILWAY_ENVIRONMENT') else 'threading'
 sio = SocketIO(app, cors_allowed_origins='*', async_mode=_async_mode,
                ping_timeout=60, ping_interval=25)
 
