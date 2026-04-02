@@ -8,7 +8,23 @@ import os
 import hashlib
 import psycopg
 
-DATABASE_URL = os.environ.get('postgresql://postgres:IvXCUYXELQdRPOpIKwpglgcFWwiZCzIX@postgres.railway.internal:5432/railway', '')
+# Load .env file nếu có
+def _load_env():
+    for base in (os.path.dirname(os.path.abspath(__file__)),
+                 os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')):
+        env_path = os.path.join(base, '.env')
+        if os.path.isfile(env_path):
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        k, v = line.split('=', 1)
+                        os.environ.setdefault(k.strip(), v.strip())
+            break
+
+_load_env()
+
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
 
 if not DATABASE_URL:
     raise RuntimeError(
