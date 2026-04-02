@@ -268,7 +268,7 @@ def _run_online_game(surface, screen_w, screen_h,
                   username, opponent, my_color, now_player, f_info, f_small)
         if game.is_over:
             game.show_gameover(surface)
-            hint = f_small.render('Bam ESC de ve menu', True, C_DIM)
+            hint = f_small.render('Bam ESC hoac M de ve menu', True, C_DIM)
             surface.blit(hint, hint.get_rect(centerx=screen_w//2, y=screen_h-30))
 
         pygame.display.flip()
