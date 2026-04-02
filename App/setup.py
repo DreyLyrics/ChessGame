@@ -14,11 +14,12 @@ import shutil
 ROOT  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PY    = sys.executable
 ENTRY = os.path.join(ROOT, 'UI', 'menu.py')
-DIST  = os.path.join(ROOT, 'App', 'dist')
+DIST  = os.path.join(os.path.expanduser('~'), 'Desktop', NAME if 'NAME' in dir() else 'ChessGamePlay')
 WORK  = os.path.join(ROOT, 'App', 'build_tmp')
 HOOK  = os.path.join(ROOT, 'App', 'runtime_hook.py')
 NAME  = 'ChessGamePlay'
-SEP   = os.pathsep   # ; tren Windows
+DIST  = os.path.join(os.path.expanduser('~'), 'Desktop', NAME)
+SEP   = os.pathsep
 
 def sep(c='=', n=54):
     print(c * n)
@@ -153,27 +154,7 @@ print(f'    Output: {DIST}\\{NAME}\n')
 
 run(cmd)
 
-# ── Copy chess.db vao dist ────────────────────────────────────────────────────
-db_src     = os.path.join(ROOT, 'DataBase', 'chess.db')
-db_dst_dir = os.path.join(DIST, NAME, 'DataBase')
-db_dst     = os.path.join(db_dst_dir, 'chess.db')
-
-os.makedirs(db_dst_dir, exist_ok=True)
-if os.path.isfile(db_src):
-    shutil.copy2(db_src, db_dst)
-    print(f'[*] Da copy chess.db -> {db_dst}')
-else:
-    # Tao DB rong
-    print('[*] Tao chess.db moi...')
-    init_script = (
-        f'import sys, os; '
-        f'sys.path.insert(0, r"{os.path.join(ROOT, "DataBase")}"); '
-        f'os.environ["CHESS_DB_DIR"] = r"{db_dst_dir}"; '
-        f'import db; db.init_db(); print("chess.db created")'
-    )
-    subprocess.run(f'"{PY}" -c "{init_script}"', shell=True)
-
-# ── Copy stockfish exe vao dist (dam bao co mat) ──────────────────────────────
+# ── Copy stockfish exe vao dist ──────────────────────────────────────────────
 sf_src = os.path.join(ROOT, 'stockfish', 'stockfish-windows-x86-64-avx2.exe')
 sf_dst_dir = os.path.join(DIST, NAME, 'stockfish')
 os.makedirs(sf_dst_dir, exist_ok=True)
@@ -191,5 +172,4 @@ for p in [WORK, HOOK]:
 sep()
 print(f'  BUILD THANH CONG!')
 print(f'  Output : {DIST}\\{NAME}\\{NAME}.exe')
-print(f'  Database: {db_dst_dir}')
 sep()
