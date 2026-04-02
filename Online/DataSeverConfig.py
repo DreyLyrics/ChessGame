@@ -34,7 +34,7 @@ if _HERE not in sys.path:
 from AppSeverConfig import DB_API_URL, USE_REMOTE_DB, REQUEST_TIMEOUT
 
 # ── fallback local db ─────────────────────────────────────────────────────────
-_DB_DIR = os.path.join(_HERE, 'DataBase')
+_DB_DIR = os.path.join(os.path.dirname(_HERE), 'DataBase')
 if _DB_DIR not in sys.path:
     sys.path.insert(0, _DB_DIR)
 

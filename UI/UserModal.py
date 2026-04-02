@@ -25,9 +25,9 @@ from LoginAndResgister import (
     InputField, Button,
 )
 import os, sys
-_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
+_ONLINE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Online')
+if _ONLINE not in sys.path:
+    sys.path.insert(0, _ONLINE)
 import DataSeverConfig as db
 
 C_HISTORY_WIN  = ( 72, 199, 142)
