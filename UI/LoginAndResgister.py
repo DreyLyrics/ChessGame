@@ -103,7 +103,7 @@ class InputField:
                     self.text = self.text[:-1]
                 self._bs_held = True
                 self._bs_next = pygame.time.get_ticks() + self._BACKSPACE_DELAY
-            elif event.key not in (pygame.K_RETURN, pygame.K_TAB, pygame.K_ESCAPE):
+            elif event.key not in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_TAB, pygame.K_ESCAPE):
                 if self._selected:
                     self.text = ''
                     self._selected = False
@@ -492,7 +492,7 @@ class Modal:
             return None
 
         # Enter: submit nếu có field đang active
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+        if event.type == pygame.KEYDOWN and event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
             if any(f.active for f in self._fields):
                 return self._submit()
 
