@@ -159,6 +159,8 @@ def _run_online_game(surface, screen_w, screen_h,
         now_player = game.next_player
 
         # poll tất cả event — queue đảm bảo không mất
+        opponent_disconnected = False
+
         for ev, data in client.poll():
             if ev == 'opponent_move':
                 gm = _uci_to_move(data.get('uci', ''))
@@ -172,8 +174,22 @@ def _run_online_game(surface, screen_w, screen_h,
                             board.set_true_en_passant(sq.piece)
                             game.play_sound(captured)
                             game.next_turn()
-            elif ev in ('game_over', 'room_closed'):
-                exit_signal = 'menu'
+            elif ev == 'game_over':
+                result = data.get('result', '')
+                if result == 'disconnect' and not game.is_over:
+                    opponent_disconnected = True
+                else:
+                    exit_signal = 'menu'
+            elif ev == 'room_closed':
+                if not game.is_over:
+                    opponent_disconnected = True
+
+        # đối thủ thoát → người còn lại thắng
+        if opponent_disconnected and not game.is_over:
+            game._trigger_alert(f'{opponent} da thoat! Ban thang!', (72, 199, 142))
+            game.winner      = my_color
+            game.game_result = 1   # RESULT_CHECKMATE (dùng lại để show gameover)
+            game.in_check    = False
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
