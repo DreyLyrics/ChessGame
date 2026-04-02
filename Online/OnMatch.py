@@ -193,25 +193,28 @@ def _run_online_game(surface, screen_w, screen_h,
                 continue
 
             if event.type == pygame.MOUSEBUTTONDOWN:
-                dragger.update_mouse(event.pos)
+                mapped = _map_pos(event.pos, my_color)
+                dragger.update_mouse(mapped)
                 r = (dragger.mouseY - BOARD_OFFSET_Y) // SQSIZE
                 c = (dragger.mouseX - BOARD_OFFSET_X) // SQSIZE
                 if not Square.in_range(r, c): continue
                 sq = board.squares[r][c]
                 if sq.has_piece() and sq.piece.color == my_color:
                     board.calc_moves(sq.piece, r, c, bool=True)
-                    dragger.save_initial(event.pos)
+                    dragger.save_initial(mapped)
                     dragger.drag_piece(sq.piece)
 
             elif event.type == pygame.MOUSEMOTION:
-                r = (event.pos[1] - BOARD_OFFSET_Y) // SQSIZE
-                c = (event.pos[0] - BOARD_OFFSET_X) // SQSIZE
+                mapped = _map_pos(event.pos, my_color)
+                r = (mapped[1] - BOARD_OFFSET_Y) // SQSIZE
+                c = (mapped[0] - BOARD_OFFSET_X) // SQSIZE
                 if Square.in_range(r, c): game.set_hover(r, c)
                 if dragger.dragging: dragger.update_mouse(event.pos)
 
             elif event.type == pygame.MOUSEBUTTONUP:
                 if dragger.dragging:
-                    dragger.update_mouse(event.pos)
+                    mapped = _map_pos(event.pos, my_color)
+                    dragger.update_mouse(mapped)
                     r = (dragger.mouseY - BOARD_OFFSET_Y) // SQSIZE
                     c = (dragger.mouseX - BOARD_OFFSET_X) // SQSIZE
                     if Square.in_range(r, c):
@@ -233,9 +236,13 @@ def _run_online_game(surface, screen_w, screen_h,
             break
 
         surface.fill((18, 18, 30))
-        game.show_bg(surface);       game.show_last_move(surface)
-        game.show_moves(surface);    game.show_pieces(surface)
-        game.show_hover(surface);    game.show_check(surface)
+        flip = (my_color == 'black')
+        game.show_bg(surface)
+        _show_last_move_flip(surface, game, flip)
+        _show_moves_flip(surface, game, flip)
+        _show_pieces_flip(surface, game, flip)
+        _show_hover_flip(surface, game, flip)
+        game.show_check(surface)
         if dragger.dragging:
             dragger.update_blit(surface, game._img_cache)
         game.show_turn_panel(surface)
@@ -335,3 +342,71 @@ def _draw_hud(surface, sw, sh, me, opp, my_color, now_player, f_info, f_small):
     else:
         ts = f_small.render('⏳ Cho doi thu...', True, C_DIM)
     surface.blit(ts, (pad + 8 + me_s.get_width() + 10, pad + 8))
+
+
+# ── Flip helpers (dùng chung cho online game) ─────────────────────────────────
+
+def _fr(row, flip): return (ROWS - 1 - row) if flip else row
+def _fc(col, flip): return (COLS - 1 - col) if flip else col
+
+def _map_pos(pos, my_color):
+    """Đảo tọa độ chuột khi chơi quân Đen."""
+    x, y = pos
+    if my_color == 'black':
+        bx, by = BOARD_OFFSET_X, BOARD_OFFSET_Y
+        if bx <= x <= bx + BOARD_W and by <= y <= by + BOARD_H:
+            x = bx + BOARD_W - (x - bx)
+            y = by + BOARD_H - (y - by)
+    return (x, y)
+
+def _show_pieces_flip(surface, game, flip):
+    ox, oy = BOARD_OFFSET_X, BOARD_OFFSET_Y
+    for row in range(ROWS):
+        for col in range(COLS):
+            sq = game.board.squares[row][col]
+            if sq.has_piece() and sq.piece is not game.dragger.piece:
+                piece = sq.piece
+                piece.set_texture(size=80)
+                img = game._load_img(piece.texture)
+                dr, dc = _fr(row, flip), _fc(col, flip)
+                cx = ox + dc * SQSIZE + SQSIZE // 2
+                cy = oy + dr * SQSIZE + SQSIZE // 2
+                piece.texture_rect = img.get_rect(center=(cx, cy))
+                surface.blit(img, piece.texture_rect)
+
+def _show_moves_flip(surface, game, flip):
+    if not game.dragger.dragging or not game.config.show_hints:
+        return
+    ox, oy = BOARD_OFFSET_X, BOARD_OFFSET_Y
+    theme = game.config.theme
+    for move in game.dragger.piece.moves:
+        r, c = move.final.row, move.final.col
+        dr, dc = _fr(r, flip), _fc(c, flip)
+        color = theme.moves.light if (r + c) % 2 == 0 else theme.moves.dark
+        cx = ox + dc * SQSIZE + SQSIZE // 2
+        cy = oy + dr * SQSIZE + SQSIZE // 2
+        if game.board.squares[r][c].has_piece():
+            pygame.draw.circle(surface, color, (cx, cy), SQSIZE // 2 - 4, 7)
+        else:
+            pygame.draw.circle(surface, color, (cx, cy), SQSIZE // 5)
+
+def _show_last_move_flip(surface, game, flip):
+    if not game.board.last_move:
+        return
+    ox, oy = BOARD_OFFSET_X, BOARD_OFFSET_Y
+    theme = game.config.theme
+    for pos in [game.board.last_move.initial, game.board.last_move.final]:
+        dr = _fr(pos.row, flip)
+        dc = _fc(pos.col, flip)
+        color = theme.trace.light if (pos.row + pos.col) % 2 == 0 else theme.trace.dark
+        pygame.draw.rect(surface, color,
+                         (ox + dc * SQSIZE, oy + dr * SQSIZE, SQSIZE, SQSIZE))
+
+def _show_hover_flip(surface, game, flip):
+    if not game.hovered_sqr:
+        return
+    ox, oy = BOARD_OFFSET_X, BOARD_OFFSET_Y
+    dr = _fr(game.hovered_sqr.row, flip)
+    dc = _fc(game.hovered_sqr.col, flip)
+    pygame.draw.rect(surface, (180, 180, 180),
+                     (ox + dc * SQSIZE, oy + dr * SQSIZE, SQSIZE, SQSIZE), width=3)
