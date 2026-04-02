@@ -8,7 +8,7 @@ import os
 import hashlib
 import psycopg
 
-DATABASE_URL = os.environ.get('DATABASE_URL', '')
+DATABASE_URL = os.environ.get('postgresql://postgres:IvXCUYXELQdRPOpIKwpglgcFWwiZCzIX@postgres.railway.internal:5432/railway', '')
 
 if not DATABASE_URL:
     raise RuntimeError(
