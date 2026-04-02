@@ -146,18 +146,27 @@ class BotMain:
         self._thinking    = False
 
     def _map_pos(self, pos):
-        """Không flip — tọa độ chuột giữ nguyên."""
-        return pos
+        """Khi chơi Đen: đảo tọa độ chuột để khớp với bàn cờ flip."""
+        x, y = pos
+        if self.HUMAN_COLOR == 'black':
+            bx, by = BOARD_OFFSET_X, BOARD_OFFSET_Y
+            if bx <= x <= bx + BOARD_W and by <= y <= by + BOARD_H:
+                x = bx + BOARD_W - (x - bx)
+                y = by + BOARD_H - (y - by)
+        return (x, y)
 
     def _draw_frame(self):
         g = self.game
         s = self.screen
         s.fill((18, 18, 30))
+        flip = (self.HUMAN_COLOR == 'black')
 
-        # Luôn vẽ bình thường — không flip dù là quân Đen
-        g.show_bg(s);       g.show_last_move(s)
-        g.show_moves(s);    g.show_pieces(s)
-        g.show_hover(s);    g.show_check(s)
+        g.show_bg(s)
+        self._show_last_move_flip(s, flip)
+        self._show_moves_flip(s, flip)
+        self._show_pieces_flip(s, flip)
+        self._show_hover_flip(s, flip)
+        g.show_check(s)
         if g.dragger.dragging:
             g.dragger.update_blit(s, g._img_cache)
 
@@ -166,6 +175,71 @@ class BotMain:
         g.show_alert(s)
         if g.is_over:
             self._btn_reset, self._btn_menu = g.show_gameover(s)
+
+    # ── flip helpers ──────────────────────────────────────────────────────────
+
+    def _fr(self, row, flip):
+        """Chuyển row thật → row hiển thị."""
+        return (ROWS - 1 - row) if flip else row
+
+    def _fc(self, col, flip):
+        return (COLS - 1 - col) if flip else col
+
+    def _show_pieces_flip(self, surface, flip):
+        g = self.game
+        ox, oy = BOARD_OFFSET_X, BOARD_OFFSET_Y
+        for row in range(ROWS):
+            for col in range(COLS):
+                sq = g.board.squares[row][col]
+                if sq.has_piece() and sq.piece is not g.dragger.piece:
+                    piece = sq.piece
+                    piece.set_texture(size=80)
+                    img = g._load_img(piece.texture)
+                    dr, dc = self._fr(row, flip), self._fc(col, flip)
+                    cx = ox + dc * SQSIZE + SQSIZE // 2
+                    cy = oy + dr * SQSIZE + SQSIZE // 2
+                    piece.texture_rect = img.get_rect(center=(cx, cy))
+                    surface.blit(img, piece.texture_rect)
+
+    def _show_moves_flip(self, surface, flip):
+        g = self.game
+        if not g.dragger.dragging or not g.config.show_hints:
+            return
+        ox, oy = BOARD_OFFSET_X, BOARD_OFFSET_Y
+        theme = g.config.theme
+        for move in g.dragger.piece.moves:
+            r, c = move.final.row, move.final.col
+            dr, dc = self._fr(r, flip), self._fc(c, flip)
+            color = theme.moves.light if (r + c) % 2 == 0 else theme.moves.dark
+            cx = ox + dc * SQSIZE + SQSIZE // 2
+            cy = oy + dr * SQSIZE + SQSIZE // 2
+            if g.board.squares[r][c].has_piece():
+                pygame.draw.circle(surface, color, (cx, cy), SQSIZE // 2 - 4, 7)
+            else:
+                pygame.draw.circle(surface, color, (cx, cy), SQSIZE // 5)
+
+    def _show_last_move_flip(self, surface, flip):
+        g = self.game
+        if not g.board.last_move:
+            return
+        ox, oy = BOARD_OFFSET_X, BOARD_OFFSET_Y
+        theme = g.config.theme
+        for pos in [g.board.last_move.initial, g.board.last_move.final]:
+            dr = self._fr(pos.row, flip)
+            dc = self._fc(pos.col, flip)
+            color = theme.trace.light if (pos.row + pos.col) % 2 == 0 else theme.trace.dark
+            pygame.draw.rect(surface, color,
+                             (ox + dc * SQSIZE, oy + dr * SQSIZE, SQSIZE, SQSIZE))
+
+    def _show_hover_flip(self, surface, flip):
+        g = self.game
+        if not g.hovered_sqr:
+            return
+        ox, oy = BOARD_OFFSET_X, BOARD_OFFSET_Y
+        dr = self._fr(g.hovered_sqr.row, flip)
+        dc = self._fc(g.hovered_sqr.col, flip)
+        pygame.draw.rect(surface, (180, 180, 180),
+                         (ox + dc * SQSIZE, oy + dr * SQSIZE, SQSIZE, SQSIZE), width=3)
 
     # ── bot ───────────────────────────────────────────────────────────────────
 
