@@ -283,87 +283,98 @@ def status():
 
 # ── Database API endpoints ────────────────────────────────────────────────────
 
+_db_module = None
+
 def _get_db():
-    """Import db module — dùng SQLite trên server Railway."""
+    global _db_module
+    if _db_module is not None:
+        return _db_module
     import sys, os
     _db_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'DataBase')
     if _db_dir not in sys.path:
         sys.path.insert(0, _db_dir)
-    import db
-    return db
+    import db as _db
+    _db_module = _db
+    return _db_module
+
+def _db_error(e):
+    log.error(f'DB error: {e}')
+    return {'ok': False, 'error': str(e)}, 500
 
 @app.route('/api/register', methods=['POST'])
 def api_register():
-    from flask import request as req
-    data = req.get_json() or {}
-    db = _get_db()
-    return db.register(data.get('username',''), data.get('email',''), data.get('password',''))
+    try:
+        data = freq.get_json() or {}
+        return _get_db().register(data.get('username',''), data.get('email',''), data.get('password',''))
+    except Exception as e: return _db_error(e)
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
-    from flask import request as req
-    data = req.get_json() or {}
-    db = _get_db()
-    return db.login(data.get('username',''), data.get('password',''))
+    try:
+        data = freq.get_json() or {}
+        return _get_db().login(data.get('username',''), data.get('password',''))
+    except Exception as e: return _db_error(e)
 
 @app.route('/api/user', methods=['GET'])
 def api_get_user():
-    from flask import request as req
-    username = req.args.get('username','')
-    db = _get_db()
-    user = db.get_user(username)
-    if user:
-        return {'ok': True, 'user': user}
-    return {'ok': False, 'error': 'User not found'}
+    try:
+        user = _get_db().get_user(freq.args.get('username',''))
+        return {'ok': True, 'user': user} if user else {'ok': False, 'error': 'Not found'}
+    except Exception as e: return _db_error(e)
 
 @app.route('/api/user_by_id', methods=['GET'])
 def api_get_user_by_id():
-    from flask import request as req
-    uid = req.args.get('id', 0, type=int)
-    db = _get_db()
-    user = db.get_user_by_id(uid)
-    if user:
-        return {'ok': True, 'user': user}
-    return {'ok': False, 'error': 'User not found'}
+    try:
+        user = _get_db().get_user_by_id(freq.args.get('id', 0, type=int))
+        return {'ok': True, 'user': user} if user else {'ok': False, 'error': 'Not found'}
+    except Exception as e: return _db_error(e)
 
 @app.route('/api/user_exists', methods=['GET'])
 def api_user_exists():
-    from flask import request as req
-    username = req.args.get('username','')
-    db = _get_db()
-    return {'ok': True, 'exists': db.user_exists(username)}
+    try:
+        return {'ok': True, 'exists': _get_db().user_exists(freq.args.get('username',''))}
+    except Exception as e: return _db_error(e)
 
 @app.route('/api/update_profile', methods=['POST'])
 def api_update_profile():
-    from flask import request as req
-    data = req.get_json() or {}
-    db = _get_db()
-    return db.update_profile(
-        data.get('username',''),
-        display_name = data.get('display_name'),
-        avatar_color = data.get('avatar_color'),
-        avatar_path  = data.get('avatar_path'),
-    )
+    try:
+        data = freq.get_json() or {}
+        return _get_db().update_profile(
+            data.get('username',''),
+            display_name=data.get('display_name'),
+            avatar_color=data.get('avatar_color'),
+            avatar_path =data.get('avatar_path'),
+        )
+    except Exception as e: return _db_error(e)
 
 @app.route('/api/add_match', methods=['POST'])
 def api_add_match():
-    from flask import request as req
-    data = req.get_json() or {}
-    db = _get_db()
-    db.add_match(
-        data.get('user_id'), data.get('opponent',''),
-        data.get('result',''), data.get('color',''),
-        data.get('moves', 0)
-    )
-    return {'ok': True}
+    try:
+        data = freq.get_json() or {}
+        _get_db().add_match(
+            data.get('user_id'), data.get('opponent',''),
+            data.get('result',''), data.get('color',''), data.get('moves', 0)
+        )
+        return {'ok': True}
+    except Exception as e: return _db_error(e)
 
 @app.route('/api/match_history', methods=['GET'])
 def api_match_history():
-    from flask import request as req
-    user_id = req.args.get('user_id', 0, type=int)
-    limit   = req.args.get('limit', 20, type=int)
-    db = _get_db()
-    return {'ok': True, 'history': db.get_match_history(user_id, limit)}
+    try:
+        return {'ok': True, 'history': _get_db().get_match_history(
+            freq.args.get('user_id', 0, type=int),
+            freq.args.get('limit', 20, type=int)
+        )}
+    except Exception as e: return _db_error(e)
+
+@app.route('/api/health')
+def api_health():
+    """Kiểm tra DB connection."""
+    try:
+        _get_db().user_exists('__health_check__')
+        return {'ok': True, 'db': 'connected'}
+    except Exception as e:
+        return {'ok': False, 'db': str(e)}, 500
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
