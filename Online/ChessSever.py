@@ -267,20 +267,6 @@ def on_game_over(data):
 
 # ── HTTP endpoints ────────────────────────────────────────────────────────────
 
-@app.route('/debug')
-def debug():
-    import sys, os
-    db_url = os.environ.get('DATABASE_URL', 'NOT SET')
-    db_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'DataBase')
-    return {
-        'DATABASE_URL_set': db_url != 'NOT SET',
-        'DATABASE_URL_prefix': db_url[:30] if db_url != 'NOT SET' else 'NOT SET',
-        'DataBase_dir_exists': os.path.isdir(db_dir),
-        'DataBase_dir': db_dir,
-        'cwd': os.getcwd(),
-        'sys_path': sys.path[:5],
-    }
-
 @app.route('/')
 def index():
     return {'status': 'Chess server running', 'version': '2.0'}
