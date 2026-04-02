@@ -1,11 +1,10 @@
 """
 Online/server_config.py
-URL server Railway cho chế độ online.
+Re-export SERVER_URL từ AppSeverConfig để OnMatch.py dùng.
 """
+import os, sys
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
-import os
-
-SERVER_URL = os.environ.get(
-    'CHESS_SERVER_URL',
-    'https://web-production-0f37b.up.railway.app'
-)
+from AppSeverConfig import SERVER_URL

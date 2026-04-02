@@ -24,7 +24,11 @@ from LoginAndResgister import (
     C_TEXT, C_TEXT_DIM, C_ERROR, C_SUCCESS, C_OVERLAY,
     InputField, Button,
 )
-import db
+import os, sys
+_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+import DataSeverConfig as db
 
 C_HISTORY_WIN  = ( 72, 199, 142)
 C_HISTORY_LOSS = (220,  80,  80)

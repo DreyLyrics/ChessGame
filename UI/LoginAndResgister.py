@@ -523,10 +523,10 @@ class Modal:
 
     def _submit(self):
         import os, sys
-        _DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'DataBase')
-        if _DB not in sys.path:
-            sys.path.insert(0, _DB)
-        import db
+        _ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+        if _ROOT not in sys.path:
+            sys.path.insert(0, _ROOT)
+        import DataSeverConfig as db
 
         u = self.field_user.text.strip()
         p = self.field_pass.text
@@ -793,10 +793,10 @@ class AvatarButton:
                 self.username  = u
                 # lấy đầy đủ thông tin từ DB
                 import os as _os, sys as _sys
-                _db_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..', 'DataBase')
-                if _db_path not in _sys.path:
-                    _sys.path.insert(0, _db_path)
-                import db as _db
+                _root = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..')
+                if _root not in _sys.path:
+                    _sys.path.insert(0, _root)
+                import DataSeverConfig as _db
                 full = _db.get_user(u) or {}
                 self.email        = full.get('email', '')
                 self.display_name = full.get('display_name', '') or u

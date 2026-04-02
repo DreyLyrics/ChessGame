@@ -281,6 +281,91 @@ def status():
         }
 
 
+# ── Database API endpoints ────────────────────────────────────────────────────
+
+def _get_db():
+    """Import db module — dùng SQLite trên server Railway."""
+    import sys, os
+    _db_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'DataBase')
+    if _db_dir not in sys.path:
+        sys.path.insert(0, _db_dir)
+    import db
+    return db
+
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    from flask import request as req
+    data = req.get_json() or {}
+    db = _get_db()
+    return db.register(data.get('username',''), data.get('email',''), data.get('password',''))
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    from flask import request as req
+    data = req.get_json() or {}
+    db = _get_db()
+    return db.login(data.get('username',''), data.get('password',''))
+
+@app.route('/api/user', methods=['GET'])
+def api_get_user():
+    from flask import request as req
+    username = req.args.get('username','')
+    db = _get_db()
+    user = db.get_user(username)
+    if user:
+        return {'ok': True, 'user': user}
+    return {'ok': False, 'error': 'User not found'}
+
+@app.route('/api/user_by_id', methods=['GET'])
+def api_get_user_by_id():
+    from flask import request as req
+    uid = req.args.get('id', 0, type=int)
+    db = _get_db()
+    user = db.get_user_by_id(uid)
+    if user:
+        return {'ok': True, 'user': user}
+    return {'ok': False, 'error': 'User not found'}
+
+@app.route('/api/user_exists', methods=['GET'])
+def api_user_exists():
+    from flask import request as req
+    username = req.args.get('username','')
+    db = _get_db()
+    return {'ok': True, 'exists': db.user_exists(username)}
+
+@app.route('/api/update_profile', methods=['POST'])
+def api_update_profile():
+    from flask import request as req
+    data = req.get_json() or {}
+    db = _get_db()
+    return db.update_profile(
+        data.get('username',''),
+        display_name = data.get('display_name'),
+        avatar_color = data.get('avatar_color'),
+        avatar_path  = data.get('avatar_path'),
+    )
+
+@app.route('/api/add_match', methods=['POST'])
+def api_add_match():
+    from flask import request as req
+    data = req.get_json() or {}
+    db = _get_db()
+    db.add_match(
+        data.get('user_id'), data.get('opponent',''),
+        data.get('result',''), data.get('color',''),
+        data.get('moves', 0)
+    )
+    return {'ok': True}
+
+@app.route('/api/match_history', methods=['GET'])
+def api_match_history():
+    from flask import request as req
+    user_id = req.args.get('user_id', 0, type=int)
+    limit   = req.args.get('limit', 20, type=int)
+    db = _get_db()
+    return {'ok': True, 'history': db.get_match_history(user_id, limit)}
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':

@@ -212,7 +212,7 @@ class MenuScreen:
                 if _UI_DIR not in sys.path:
                     sys.path.insert(0, _UI_DIR)
                 from UserModal import UserModal
-                import db as _db
+                import DataSeverConfig as _db
                 full_user = _db.get_user(self.avatar_btn.username) or {}
                 user_data = {
                     'id':           full_user.get('id', 0),
