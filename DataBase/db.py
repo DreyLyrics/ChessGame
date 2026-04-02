@@ -11,9 +11,13 @@ import psycopg
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 
 if not DATABASE_URL:
+    # Thử DATABASE_PUBLIC_URL (Railway public endpoint)
+    DATABASE_URL = os.environ.get('DATABASE_PUBLIC_URL', '')
+
+if not DATABASE_URL:
     raise RuntimeError(
         'DATABASE_URL chua duoc set!\n'
-        'Railway: Add PostgreSQL service → DATABASE_URL tu dong inject.\n'
+        'Railway: Variables → DATABASE_URL = <postgres connection string>\n'
         'Local:   export DATABASE_URL="postgresql://user:pass@host:5432/dbname"'
     )
 
