@@ -280,8 +280,9 @@ class Game:
             sub_txt = 'Chieu tuong!' if self.game_result == RESULT_CHECKMATE else 'Vua bi bat!'
             sub = self._font_med.render(sub_txt, True, COLOR_CHECK)
             surface.blit(sub, sub.get_rect(center=(mid_x, mid_y-45)))
-            desc = self._font_sub.render(f'Vua {ln} da bi an', True, (200,200,200))
-            surface.blit(desc, desc.get_rect(center=(mid_x, mid_y-10)))
+            if not perspective:
+                desc = self._font_sub.render(f'Vua {ln} da bi an', True, (200,200,200))
+                surface.blit(desc, desc.get_rect(center=(mid_x, mid_y-10)))
         elif self.game_result == RESULT_STALEMATE:
             title = self._font_big.render('HOA CO!', True, (180,180,255))
             surface.blit(title, title.get_rect(center=(mid_x, mid_y-90)))
