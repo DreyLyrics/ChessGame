@@ -154,12 +154,12 @@ def _run_online_game(surface, screen_w, screen_h,
                          'Trang ♔' if my_color == 'white' else 'Den ♚')
 
     exit_signal = None
+    _opp_disconnected = False   # flag persistent, không reset mỗi frame
 
     while True:
         now_player = game.next_player
 
         # poll tất cả event — queue đảm bảo không mất
-        opponent_disconnected = False
 
         for ev, data in client.poll():
             if ev == 'opponent_move':
@@ -176,19 +176,19 @@ def _run_online_game(surface, screen_w, screen_h,
                             game.next_turn()
             elif ev == 'game_over':
                 result = data.get('result', '')
-                if result == 'disconnect' and not game.is_over:
-                    opponent_disconnected = True
-                else:
+                if result == 'disconnect':
+                    _opp_disconnected = True
+                elif not game.is_over:
                     exit_signal = 'menu'
             elif ev == 'room_closed':
-                if not game.is_over:
-                    opponent_disconnected = True
+                _opp_disconnected = True
 
-        # đối thủ thoát → người còn lại thắng
-        if opponent_disconnected and not game.is_over:
+        # đối thủ thoát → người còn lại thắng (áp dụng 1 lần)
+        if _opp_disconnected and not game.is_over:
+            _opp_disconnected = False
             game._trigger_alert(f'{opponent} da thoat! Ban thang!', (72, 199, 142))
             game.winner      = my_color
-            game.game_result = 1   # RESULT_CHECKMATE (dùng lại để show gameover)
+            game.game_result = 1
             game.in_check    = False
 
         for event in pygame.event.get():
