@@ -45,10 +45,19 @@ class CreateMatch:
             threading.Thread(target=self._load_host_display, daemon=True).start()
 
     def _wait_game_started(self):
-        data=self._client.wait_for('game_started', timeout=600)
-        if data:
-            self._game_color=data.get('color','white')
-            self._game_ready.set()
+        """Chờ game_started event — dùng poll để không miss event."""
+        import time as _time
+        deadline = _time.time() + 600
+        while _time.time() < deadline and not self._game_ready.is_set():
+            for ev, data in self._client.poll():
+                if ev == 'game_started':
+                    self._game_color = data.get('color', 'white')
+                    self._game_ready.set()
+                    return
+                else:
+                    # đưa event khác trở lại queue
+                    self._client._q.put((ev, data))
+            _time.sleep(0.1)
 
     def _load_host_display(self):
         """Guest load host_display từ DB ngay khi vào phòng."""
