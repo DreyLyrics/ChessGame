@@ -58,14 +58,17 @@ def init_db():
                     losses        INTEGER DEFAULT 0,
                     draws         INTEGER DEFAULT 0,
                     role          TEXT    DEFAULT 'user',
+                    ban_until     TIMESTAMP DEFAULT NULL,
                     created_at    TIMESTAMP DEFAULT NOW()
                 )
             ''')
-            # migration: thêm cột role nếu chưa có
+            # migration: thêm cột nếu chưa có
             cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='users'")
             user_cols = [r[0] for r in cur.fetchall()]
             if user_cols and 'role' not in user_cols:
                 cur.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
+            if user_cols and 'ban_until' not in user_cols:
+                cur.execute("ALTER TABLE users ADD COLUMN ban_until TIMESTAMP DEFAULT NULL")
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS match_history (
                     id        SERIAL PRIMARY KEY,
@@ -499,6 +502,32 @@ def set_user_role(username: str, role: str) -> dict:
             cur.execute('UPDATE users SET role=%s WHERE username=%s', (role, username))
         conn.commit()
     return {'ok': True}
+
+
+def set_user_ban(username: str, ban_until=None) -> dict:
+    """Ban user: ban_until=None → vĩnh viễn, ban_until=datetime → có thời hạn."""
+    from datetime import datetime, timezone
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                if ban_until is None:
+                    # ban vĩnh viễn: role='banned', ban_until=NULL
+                    cur.execute(
+                        "UPDATE users SET role='banned', ban_until=NULL WHERE username=%s",
+                        (username,)
+                    )
+                else:
+                    # ban có thời hạn
+                    if isinstance(ban_until, str):
+                        ban_until = datetime.fromisoformat(ban_until)
+                    cur.execute(
+                        "UPDATE users SET role='banned', ban_until=%s WHERE username=%s",
+                        (ban_until, username)
+                    )
+            conn.commit()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
 
 
 def delete_user(username: str) -> dict:

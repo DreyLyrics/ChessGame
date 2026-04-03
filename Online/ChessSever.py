@@ -547,6 +547,14 @@ def api_admin_seed():
     db = _get_db()
     return db.seed_admin()
 
+@app.route('/api/admin/ban', methods=['POST'])
+def api_admin_ban():
+    """Ban user: ban_until=None → vĩnh viễn, ban_until=ISO string → có thời hạn."""
+    from flask import request as req
+    data = req.get_json() or {}
+    db = _get_db()
+    return db.set_user_ban(data.get('username', ''), data.get('ban_until', None))
+
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 

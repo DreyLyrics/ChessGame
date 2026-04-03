@@ -151,3 +151,7 @@ def admin_delete_message(msg_id: int) -> dict:
 
 def admin_seed() -> dict:
     return _post('/admin/seed', {})
+
+def admin_ban_user(username: str, ban_until=None) -> dict:
+    """Ban user. ban_until=None → vĩnh viễn, ban_until=ISO string → có thời hạn."""
+    return _post('/admin/ban', {'username': username, 'ban_until': ban_until})
