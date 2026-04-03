@@ -68,11 +68,12 @@ def _gen_pin() -> str:
 def _room_info(pin: str) -> dict:
     r = _rooms.get(pin, {})
     return {
-        'pin':     pin,
-        'host':    r.get('host', ''),
-        'guest':   r.get('guest', ''),
-        'players': r.get('players', 0),
-        'started': r.get('started', False),
+        'pin':          pin,
+        'host':         r.get('host', ''),
+        'host_display': r.get('host_display', r.get('host', '')),
+        'guest':        r.get('guest_display', r.get('guest', '')),
+        'players':      r.get('players', 0),
+        'started':      r.get('started', False),
     }
 
 def _broadcast_rooms():

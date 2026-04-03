@@ -30,7 +30,8 @@ class CreateMatch:
         self._client=client
         self._result=...; self._open_t=0
         self._msg=''; self._msg_ok=False; self._msg_timer=0
-        self._guest=''
+        # nếu là guest → slot guest hiện tên mình ngay
+        self._guest = '' if self.is_host else (display_name or username)
         self._game_color=None
         self._game_ready=threading.Event()   # set khi game_started nhận được
         self._init_fonts(); self._build()
