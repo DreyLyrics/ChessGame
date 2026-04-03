@@ -10,10 +10,8 @@ class Board:
     def __init__(self):
         self.squares   = [[0]*COLS for _ in range(ROWS)]
         self.last_move = None
-
-        # tracking
-        self.move_log   = []   # list of (piece_name, color, from_sq, to_sq, captured_name|None)
-        self.captured   = {'white': [], 'black': []}  # quân bị ăn bởi mỗi bên
+        self.move_log  = []
+        self.captured  = {'white': [], 'black': []}
 
         self._create()
         self._add_pieces('white')
@@ -28,9 +26,7 @@ class Board:
         final   = move.final
 
         en_passant_empty = self.squares[final.row][final.col].isempty()
-
-        # quân bị ăn (nếu có) — ghi trước khi xóa
-        captured_piece = self.squares[final.row][final.col].piece
+        captured_piece   = self.squares[final.row][final.col].piece
 
         self.squares[initial.row][initial.col].piece = None
         self.squares[final.row][final.col].piece = piece
@@ -38,7 +34,6 @@ class Board:
         if isinstance(piece, Pawn):
             diff = final.col - initial.col
             if diff != 0 and en_passant_empty:
-                # en passant — quân bị ăn ở hàng khác
                 ep_piece = self.squares[initial.row][initial.col + diff].piece
                 if ep_piece and not testing:
                     self.captured[piece.color].append(ep_piece.name)
@@ -54,7 +49,6 @@ class Board:
                 if rook:
                     self.move(rook, rook.moves[-1])
 
-        # ghi tracking (chỉ khi không phải testing)
         if not testing:
             cap_name = captured_piece.name if captured_piece else None
             if cap_name:
@@ -90,10 +84,11 @@ class Board:
                 piece.en_passant = True
 
     # ------------------------------------------------------------------ #
-    #  CHECK DETECTION                                                     #
+    #  CHECK DETECTION (dùng cho hiển thị cảnh báo, không chặn nước đi)  #
     # ------------------------------------------------------------------ #
 
     def in_check(self, piece, move):
+        """Kiểm tra nước đi có để vua bị chiếu không (chỉ dùng nội bộ)."""
         temp_piece = copy.deepcopy(piece)
         temp_board = copy.deepcopy(self)
         temp_board.move(temp_piece, move, testing=True)
@@ -101,19 +96,20 @@ class Board:
             for col in range(COLS):
                 if temp_board.squares[row][col].has_enemy_piece(piece.color):
                     p = temp_board.squares[row][col].piece
-                    temp_board.calc_moves(p, row, col, bool=False)
+                    temp_board.calc_moves(p, row, col)
                     for m in p.moves:
                         if isinstance(m.final.piece, King):
                             return True
         return False
 
     def is_in_check(self, color):
+        """Kiểm tra vua màu color có đang bị chiếu không."""
         for row in range(ROWS):
             for col in range(COLS):
                 if self.squares[row][col].has_enemy_piece(color):
                     p = self.squares[row][col].piece
                     p.clear_moves()
-                    self.calc_moves(p, row, col, bool=False)
+                    self.calc_moves(p, row, col)
                     for m in p.moves:
                         if isinstance(m.final.piece, King):
                             p.clear_moves()
@@ -127,7 +123,7 @@ class Board:
                 if self.squares[row][col].has_team_piece(color):
                     p = self.squares[row][col].piece
                     p.clear_moves()
-                    self.calc_moves(p, row, col, bool=True)
+                    self.calc_moves(p, row, col)
                     has = len(p.moves) > 0
                     p.clear_moves()
                     if has:
@@ -135,10 +131,11 @@ class Board:
         return False
 
     # ------------------------------------------------------------------ #
-    #  MOVE CALCULATION                                                    #
+    #  MOVE CALCULATION — không lọc chiếu, di chuyển tự do               #
     # ------------------------------------------------------------------ #
 
     def calc_moves(self, piece, row, col, bool=True):
+        """Tính tất cả nước đi hợp lệ. bool không còn dùng để lọc chiếu."""
 
         def pawn_moves():
             steps = 1 if piece.moved else 2
@@ -148,25 +145,15 @@ class Board:
                 if not Square.in_range(r):
                     break
                 if self.squares[r][col].isempty():
-                    mv = Move(Square(row, col), Square(r, col))
-                    if bool:
-                        if not self.in_check(piece, mv):
-                            piece.add_move(mv)
-                    else:
-                        piece.add_move(mv)
+                    piece.add_move(Move(Square(row, col), Square(r, col)))
                 else:
                     break
             for dc in [-1, 1]:
                 r, c = row + piece.dir, col + dc
                 if Square.in_range(r, c) and self.squares[r][c].has_enemy_piece(piece.color):
                     fp = self.squares[r][c].piece
-                    mv = Move(Square(row, col), Square(r, c, fp))
-                    if bool:
-                        if not self.in_check(piece, mv):
-                            piece.add_move(mv)
-                    else:
-                        piece.add_move(mv)
-            ep_row      = 3 if piece.color == 'white' else 4
+                    piece.add_move(Move(Square(row, col), Square(r, c, fp)))
+            ep_row       = 3 if piece.color == 'white' else 4
             ep_final_row = 2 if piece.color == 'white' else 5
             if row == ep_row:
                 for dc in [-1, 1]:
@@ -174,24 +161,14 @@ class Board:
                     if Square.in_range(c):
                         adj = self.squares[row][c].piece
                         if isinstance(adj, Pawn) and adj.color != piece.color and adj.en_passant:
-                            mv = Move(Square(row, col), Square(ep_final_row, c, adj))
-                            if bool:
-                                if not self.in_check(piece, mv):
-                                    piece.add_move(mv)
-                            else:
-                                piece.add_move(mv)
+                            piece.add_move(Move(Square(row, col), Square(ep_final_row, c, adj)))
 
         def knight_moves():
             for dr, dc in [(-2,1),(-1,2),(1,2),(2,1),(2,-1),(1,-2),(-1,-2),(-2,-1)]:
                 r, c = row+dr, col+dc
                 if Square.in_range(r, c) and self.squares[r][c].isempty_or_enemy(piece.color):
                     fp = self.squares[r][c].piece
-                    mv = Move(Square(row, col), Square(r, c, fp))
-                    if bool:
-                        if not self.in_check(piece, mv):
-                            piece.add_move(mv)
-                    else:
-                        piece.add_move(mv)
+                    piece.add_move(Move(Square(row, col), Square(r, c, fp)))
 
         def straightline_moves(incrs):
             for ri, ci in incrs:
@@ -200,19 +177,10 @@ class Board:
                     if not Square.in_range(r, c):
                         break
                     fp = self.squares[r][c].piece
-                    mv = Move(Square(row, col), Square(r, c, fp))
                     if self.squares[r][c].isempty():
-                        if bool:
-                            if not self.in_check(piece, mv):
-                                piece.add_move(mv)
-                        else:
-                            piece.add_move(mv)
+                        piece.add_move(Move(Square(row, col), Square(r, c, fp)))
                     elif self.squares[r][c].has_enemy_piece(piece.color):
-                        if bool:
-                            if not self.in_check(piece, mv):
-                                piece.add_move(mv)
-                        else:
-                            piece.add_move(mv)
+                        piece.add_move(Move(Square(row, col), Square(r, c, fp)))
                         break
                     else:
                         break
@@ -222,37 +190,25 @@ class Board:
             for r, c in [(row-1,col),(row-1,col+1),(row,col+1),(row+1,col+1),
                          (row+1,col),(row+1,col-1),(row,col-1),(row-1,col-1)]:
                 if Square.in_range(r, c) and self.squares[r][c].isempty_or_enemy(piece.color):
-                    mv = Move(Square(row, col), Square(r, c))
-                    if bool:
-                        if not self.in_check(piece, mv):
-                            piece.add_move(mv)
-                    else:
-                        piece.add_move(mv)
+                    piece.add_move(Move(Square(row, col), Square(r, c)))
+            # nhập thành — chỉ khi vua chưa di chuyển
             if not piece.moved:
+                # nhập thành trái (queen-side)
                 lr = self.squares[row][0].piece
                 if isinstance(lr, Rook) and not lr.moved:
                     if all(self.squares[row][c].isempty() for c in range(1, 4)):
                         piece.left_rook = lr
-                        mR = Move(Square(row,0), Square(row,3))
-                        mK = Move(Square(row,col), Square(row,2))
-                        if bool:
-                            if not self.in_check(piece,mK) and not self.in_check(lr,mR):
-                                lr.add_move(mR); piece.add_move(mK)
-                        else:
-                            lr.add_move(mR); piece.add_move(mK)
+                        lr.add_move(Move(Square(row, 0), Square(row, 3)))
+                        piece.add_move(Move(Square(row, col), Square(row, 2)))
+                # nhập thành phải (king-side)
                 rr = self.squares[row][7].piece
                 if isinstance(rr, Rook) and not rr.moved:
                     if all(self.squares[row][c].isempty() for c in range(5, 7)):
                         piece.right_rook = rr
-                        mR = Move(Square(row,7), Square(row,5))
-                        mK = Move(Square(row,col), Square(row,6))
-                        if bool:
-                            if not self.in_check(piece,mK) and not self.in_check(rr,mR):
-                                rr.add_move(mR); piece.add_move(mK)
-                        else:
-                            rr.add_move(mR); piece.add_move(mK)
+                        rr.add_move(Move(Square(row, 7), Square(row, 5)))
+                        piece.add_move(Move(Square(row, col), Square(row, 6)))
 
-        if isinstance(piece, Pawn):   pawn_moves()
+        if isinstance(piece, Pawn):     pawn_moves()
         elif isinstance(piece, Knight): knight_moves()
         elif isinstance(piece, Bishop): straightline_moves([(-1,1),(-1,-1),(1,1),(1,-1)])
         elif isinstance(piece, Rook):   straightline_moves([(-1,0),(0,1),(1,0),(0,-1)])
