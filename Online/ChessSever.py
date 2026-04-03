@@ -458,7 +458,10 @@ def api_message_send():
     from flask import request as req
     data = req.get_json() or {}
     db = _get_db()
-    return db.send_message(data.get('from_id'), data.get('to_id'), data.get('content', ''))
+    try:
+        return db.send_message(data.get('from_id'), data.get('to_id'), data.get('content', ''))
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}, 200
 
 @app.route('/api/message/history', methods=['GET'])
 def api_message_history():
