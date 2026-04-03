@@ -419,8 +419,9 @@ class AdminModal:
     # ── run ────────────────────────────────────────────────────────────────────
 
     def run(self, surface):
-        self._result = ...
-        self._open_t = pygame.time.get_ticks()
+        self._result    = ...
+        self._open_t    = pygame.time.get_ticks()
+        self._last_auto = pygame.time.get_ticks()   # mốc auto-reload
         clock = pygame.time.Clock()
         while self._result is ...:
             for event in pygame.event.get():
@@ -428,6 +429,12 @@ class AdminModal:
                     self._result = None
                     break
                 self._handle(event)
+
+            # auto-reload mỗi 10s để cập nhật trạng thái ban từ server
+            now = pygame.time.get_ticks()
+            if not self._loading and now - self._last_auto >= 10_000:
+                self._last_auto = now
+                self._load_data()
             self._draw(surface)
             pygame.display.flip()
             clock.tick(60)
