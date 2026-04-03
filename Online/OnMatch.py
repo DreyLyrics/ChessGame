@@ -329,7 +329,7 @@ def _run_online_game(surface, screen_w, screen_h,
         _draw_hud(surface, screen_w, screen_h,
                   my_display, opponent, my_color, now_player, f_info, f_small)
         if game.is_over:
-            game.show_gameover(surface)
+            game.show_gameover(surface, perspective=my_color)
             hint = f_small.render('Bam ESC hoac M de ve menu', True, C_DIM)
             surface.blit(hint, hint.get_rect(centerx=screen_w//2, y=screen_h-30))
 

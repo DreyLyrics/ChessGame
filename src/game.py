@@ -242,19 +242,41 @@ class Game:
     #  DRAW — GAME OVER                                                    #
     # ------------------------------------------------------------------ #
 
-    def show_gameover(self, surface):
+    def show_gameover(self, surface, perspective: str = None):
+        """
+        perspective: 'white' | 'black' | None
+        Nếu có perspective → hiện 'CHIEN THANG' hoặc 'THAT BAI' theo góc nhìn người chơi.
+        Nếu None → hiện kết quả chung (local/bot).
+        """
         surface.blit(self._overlay, (0, 0))
         mid_x = WIDTH  // 2
         mid_y = HEIGHT // 2
 
         if self.game_result in (RESULT_CHECKMATE, RESULT_KING_DEAD):
-            wn = 'Trang' if self.winner == 'white' else 'Den'
-            ln = 'Den'   if self.winner == 'white' else 'Trang'
-            crown = self._font_big.render(
-                '[W]' if self.winner == 'white' else '[B]', True, (255,215,0))
-            surface.blit(crown, crown.get_rect(center=(mid_x, mid_y-150)))
-            title = self._font_big.render(f'{wn} THANG!', True, (255,215,0))
-            surface.blit(title, title.get_rect(center=(mid_x, mid_y-90)))
+            if perspective:
+                # Online: hiện theo góc nhìn người chơi
+                i_win = (self.winner == perspective)
+                if i_win:
+                    title_txt = 'CHIEN THANG!'
+                    title_col = (72, 199, 142)
+                    crown_txt = '♔' if perspective == 'white' else '♚'
+                else:
+                    title_txt = 'THAT BAI!'
+                    title_col = (220, 80, 80)
+                    crown_txt = '♚' if perspective == 'white' else '♔'
+                crown = self._font_big.render(crown_txt, True, title_col)
+                surface.blit(crown, crown.get_rect(center=(mid_x, mid_y-150)))
+                title = self._font_big.render(title_txt, True, title_col)
+                surface.blit(title, title.get_rect(center=(mid_x, mid_y-90)))
+            else:
+                # Local/Bot: hiện kết quả chung
+                wn = 'Trang' if self.winner == 'white' else 'Den'
+                ln = 'Den'   if self.winner == 'white' else 'Trang'
+                crown = self._font_big.render(
+                    '[W]' if self.winner == 'white' else '[B]', True, (255,215,0))
+                surface.blit(crown, crown.get_rect(center=(mid_x, mid_y-150)))
+                title = self._font_big.render(f'{wn} THANG!', True, (255,215,0))
+                surface.blit(title, title.get_rect(center=(mid_x, mid_y-90)))
             sub_txt = 'Chieu tuong!' if self.game_result == RESULT_CHECKMATE else 'Vua bi bat!'
             sub = self._font_med.render(sub_txt, True, COLOR_CHECK)
             surface.blit(sub, sub.get_rect(center=(mid_x, mid_y-45)))
