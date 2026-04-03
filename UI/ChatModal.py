@@ -86,8 +86,12 @@ class ChatModal:
         self.field_input = InputField(
             mx + pad, my + self.H - 52, self.W - pad*2 - 72, 40,
             placeholder='Nhap tin nhan...')
-        self.btn_send = pygame.Rect(
-            mx + self.W - pad - 64, my + self.H - 52, 64, 40)
+        self.field_input.active = True   # focus mặc định
+        from LoginAndResgister import Button
+        self.btn_send = Button(
+            mx + self.W - pad - 64, my + self.H - 52, 64, 40,
+            text='Gui', bg=C_SEND_BG, bg_hover=C_SEND_HOV,
+            text_color=(255,255,255), radius=8)
 
     def run(self, surface):
         self._result = ...
@@ -106,12 +110,14 @@ class ChatModal:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         self._result = None
-                    elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                        self._send()
                 if event.type == pygame.MOUSEWHEEL:
                     if self._msg_area.collidepoint(pygame.mouse.get_pos()):
                         self._scroll = max(0, self._scroll - event.y * 20)
                 self._handle(event)
+                # Enter gửi tin nhắn (sau khi field đã xử lý)
+                if event.type == pygame.KEYDOWN:
+                    if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                        self._send()
 
             self._draw(surface)
             pygame.display.flip()
@@ -123,8 +129,8 @@ class ChatModal:
                 self._result = None; return
             if not self.panel_rect.collidepoint(event.pos):
                 self._result = None; return
-            if self.btn_send.collidepoint(event.pos):
-                self._send(); return
+        if self.btn_send.handle_event(event):
+            self._send(); return
         self.field_input.handle_event(event)
 
     def _send(self):
@@ -191,12 +197,10 @@ class ChatModal:
         self.field_input.rect = orig
 
         # nút gửi
-        bs = self.btn_send.move(dx, dy)
-        mouse = pygame.mouse.get_pos()
-        bc = C_SEND_HOV if bs.collidepoint(mouse) else C_SEND_BG
-        pygame.draw.rect(surface, bc, bs, border_radius=8)
-        sl = self.f_btn.render('Gui', True, (255,255,255))
-        surface.blit(sl, sl.get_rect(center=bs.center))
+        orig = self.btn_send.rect.copy()
+        self.btn_send.rect = self.btn_send.rect.move(dx, dy)
+        self.btn_send.draw(surface, self.f_btn)
+        self.btn_send.rect = orig
 
     def _draw_messages(self, surface, ma):
         if self._loading:
