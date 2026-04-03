@@ -48,7 +48,7 @@ class CreateMatch:
         """Chờ game_started event dùng wait_for — không miss event."""
         data = self._client.wait_for('game_started', timeout=600)
         if data:
-            self._game_color = data.get('color', 'white')
+            self._game_color = data.get('color') or 'white'
             self._game_ready.set()
 
     def _load_host_display(self):
@@ -120,7 +120,7 @@ class CreateMatch:
             if self._client:
                 for ev,data in self._client.poll():
                     if ev=='game_started':
-                        self._game_color = data.get('color', 'white')
+                        self._game_color = data.get('color') or 'white'
                         self._game_ready.set()
                     elif ev=='room_updated':
                         self._guest=data.get('guest','')

@@ -272,16 +272,16 @@ def on_start_game(data):
             emit('error', {'msg': 'Chi chu phong moi bat dau duoc'}); return
         if room['players'] < 2:
             emit('error', {'msg': 'Can 2 nguoi choi'}); return
-        colors = ['white', 'black']
-        random.shuffle(colors)
-        room.update({'color_host': colors[0], 'color_guest': colors[1], 'started': True})
+        host_color  = random.choice(['white', 'black'])
+        guest_color = 'black' if host_color == 'white' else 'white'
+        room.update({'color_host': host_color, 'color_guest': guest_color, 'started': True})
         h_sid = room['host_sid']; g_sid = room['guest_sid']
         host  = room['host'];     guest = room['guest']
         host_display  = room.get('host_display', host)
         guest_display = room.get('guest_display', guest)
-    sio.emit('game_started', {'pin': pin, 'color': colors[0], 'opponent': guest_display}, to=h_sid)
-    sio.emit('game_started', {'pin': pin, 'color': colors[1], 'opponent': host_display},  to=g_sid)
-    log.info(f'Game started {pin}: {host}({colors[0]}) vs {guest}({colors[1]})')
+    sio.emit('game_started', {'pin': pin, 'color': host_color,  'opponent': guest_display}, to=h_sid)
+    sio.emit('game_started', {'pin': pin, 'color': guest_color, 'opponent': host_display},  to=g_sid)
+    log.info(f'Game started {pin}: {host}({host_color}) vs {guest}({guest_color})')
     # cập nhật status='playing' khi host bấm bắt đầu
     try:
         _get_db().update_match_room(pin, status='playing')
