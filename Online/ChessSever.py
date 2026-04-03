@@ -141,6 +141,14 @@ def on_disconnect():
         _queue[:] = [q for q in _queue if q['sid'] != sid]
     pin = info.get('pin')
     if pin:
+        # kiểm tra trận đang chơi chưa — nếu đã started thì báo thắng cho người còn lại
+        with _lock:
+            room = _rooms.get(pin)
+        if room and room.get('started'):
+            opp_sid = room['guest_sid'] if room['host_sid'] == sid else room['host_sid']
+            if opp_sid:
+                sio.emit('game_over', {'result': 'disconnect'}, to=opp_sid)
+                log.info(f'Player disconnected from active game {pin}, opponent wins')
         _handle_leave(sid, pin)
     log.info(f'Disconnect: {sid}')
 
@@ -206,6 +214,13 @@ def on_join_room(data):
 def on_leave_room(data):
     sid = freq.sid
     pin = data.get('pin', '')
+    # nếu trận đang chơi → báo thắng cho đối thủ
+    with _lock:
+        room = _rooms.get(pin)
+    if room and room.get('started'):
+        opp_sid = room['guest_sid'] if room['host_sid'] == sid else room['host_sid']
+        if opp_sid:
+            sio.emit('game_over', {'result': 'disconnect'}, to=opp_sid)
     sio_leave(pin)
     with _lock:
         if sid in _clients:
