@@ -366,11 +366,10 @@ class MenuScreen:
                             if _ONLINE not in sys.path:
                                 sys.path.insert(0, _ONLINE)
                             from OnMatch import _run_online_game
-                            my_color = cm._game_color   # None nếu chưa nhận được
+                            my_color = cm._game_color
                             if not my_color:
-                                # fallback: lấy từ game_started event còn trong queue
-                                import random as _rnd
-                                my_color = _rnd.choice(['white', 'black'])
+                                # game_started chưa đến — không vào game
+                                continue
                             opponent = cm._guest if not is_guest else cm.host_display
                             _run_online_game(
                                 self.screen, self.W, self.H,
