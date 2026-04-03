@@ -227,10 +227,10 @@ def on_join_room(data):
     emit('room_joined', info)
     sio.emit('room_updated', info, to=pin)
     log.info(f'{username} joined room {pin}')
-    # cập nhật guest vào DB
+    # cập nhật guest vào DB (status vẫn là 'waiting')
     try:
         db = _get_db()
-        db.update_match_room(pin, guest=username, status='playing')
+        db.update_match_room(pin, guest=username)
     except Exception:
         pass
     _broadcast_rooms()
@@ -281,6 +281,11 @@ def on_start_game(data):
     sio.emit('game_started', {'pin': pin, 'color': colors[0], 'opponent': guest_display}, to=h_sid)
     sio.emit('game_started', {'pin': pin, 'color': colors[1], 'opponent': host_display},  to=g_sid)
     log.info(f'Game started {pin}: {host}({colors[0]}) vs {guest}({colors[1]})')
+    # cập nhật status='playing' khi host bấm bắt đầu
+    try:
+        _get_db().update_match_room(pin, status='playing')
+    except Exception:
+        pass
     _broadcast_rooms()
 
 @sio.on('move')
