@@ -113,14 +113,14 @@ class ModalOpPvp:
         if not pin: self._msg='Vui long nhap ma PIN'; self._msg_ok=False; return
         if not self._client: self._msg='Chua ket noi server'; self._msg_ok=False; return
         self._msg=f'Dang vao phong {pin}...'; self._msg_ok=True
-        self._client.emit('join_room',{'pin':pin,'username':self.username})
+        self._client.emit('join_room',{'pin':pin,'username':self.username,'display_name':self.display_name})
 
     def _do_create(self):
         if not self._client: self._msg='Chua ket noi server'; self._msg_ok=False; return
         if self._my_pin:
             self._result={'action':'create','pin':self._my_pin,'host':self.username,'client':self._client}; return
         self._msg='Dang tao phong...'; self._msg_ok=True
-        self._client.emit('create_room',{'username':self.username})
+        self._client.emit('create_room',{'username':self.username,'display_name':self.display_name})
 
     def _draw(self, surface):
         surface.blit(self._overlay,(0,0))

@@ -101,8 +101,10 @@ def _try_match():
         _clients[p1['sid']]['pin'] = pin
         _clients[p2['sid']]['pin'] = pin
     log.info(f"Match {pin}: {p1['username']}({colors[0]}) vs {p2['username']}({colors[1]})")
-    sio.emit('match_found', {'pin': pin, 'color': colors[0], 'opponent': p2['username']}, to=p1['sid'])
-    sio.emit('match_found', {'pin': pin, 'color': colors[1], 'opponent': p1['username']}, to=p2['sid'])
+    sio.emit('match_found', {'pin': pin, 'color': colors[0],
+                             'opponent': p2['display_name']}, to=p1['sid'])
+    sio.emit('match_found', {'pin': pin, 'color': colors[1],
+                             'opponent': p1['display_name']}, to=p2['sid'])
 
 def _handle_leave(sid: str, pin: str):
     with _lock:
@@ -154,13 +156,15 @@ def on_disconnect():
 
 @sio.on('join_queue')
 def on_join_queue(data):
-    sid      = freq.sid
-    username = data.get('username', 'Guest')
+    sid          = freq.sid
+    username     = data.get('username', 'Guest')
+    display_name = data.get('display_name', '') or username
     with _lock:
         if any(q['sid'] == sid for q in _queue):
             emit('error', {'msg': 'Ban dang trong hang doi'}); return
         _clients[sid]['username'] = username
-        _queue.append({'sid': sid, 'username': username, 'joined_at': time.time()})
+        _queue.append({'sid': sid, 'username': username,
+                       'display_name': display_name, 'joined_at': time.time()})
         pos = len(_queue)
     emit('queued', {'position': pos})
     threading.Thread(target=_try_match, daemon=True).start()
@@ -173,14 +177,16 @@ def on_leave_queue(_=None):
 
 @sio.on('create_room')
 def on_create_room(data):
-    sid      = freq.sid
-    username = data.get('username', 'Guest')
-    pin      = _gen_pin()
+    sid          = freq.sid
+    username     = data.get('username', 'Guest')
+    display_name = data.get('display_name', '') or username
+    pin          = _gen_pin()
     with _lock:
         _rooms[pin] = {
             'pin': pin, 'host': username, 'host_sid': sid,
-            'guest': '', 'guest_sid': '', 'players': 1,
-            'created': time.time(), 'started': False, 'moves': [],
+            'host_display': display_name,
+            'guest': '', 'guest_sid': '', 'guest_display': '',
+            'players': 1, 'created': time.time(), 'started': False, 'moves': [],
         }
         _clients[sid].update({'username': username, 'pin': pin})
     sio_join(pin)
@@ -190,9 +196,10 @@ def on_create_room(data):
 
 @sio.on('join_room')
 def on_join_room(data):
-    sid      = freq.sid
-    pin      = data.get('pin', '').strip()
-    username = data.get('username', 'Guest')
+    sid          = freq.sid
+    pin          = data.get('pin', '').strip()
+    username     = data.get('username', 'Guest')
+    display_name = data.get('display_name', '') or username
     with _lock:
         room = _rooms.get(pin)
         if not room:
@@ -201,7 +208,8 @@ def on_join_room(data):
             emit('error', {'msg': 'Phong da day'}); return
         if room['started']:
             emit('error', {'msg': 'Tran da bat dau'}); return
-        room.update({'guest': username, 'guest_sid': sid, 'players': 2})
+        room.update({'guest': username, 'guest_sid': sid,
+                     'guest_display': display_name, 'players': 2})
         _clients[sid].update({'username': username, 'pin': pin})
     sio_join(pin)
     info = _room_info(pin)
@@ -251,8 +259,10 @@ def on_start_game(data):
         room.update({'color_host': colors[0], 'color_guest': colors[1], 'started': True})
         h_sid = room['host_sid']; g_sid = room['guest_sid']
         host  = room['host'];     guest = room['guest']
-    sio.emit('game_started', {'pin': pin, 'color': colors[0], 'opponent': guest}, to=h_sid)
-    sio.emit('game_started', {'pin': pin, 'color': colors[1], 'opponent': host},  to=g_sid)
+        host_display  = room.get('host_display', host)
+        guest_display = room.get('guest_display', guest)
+    sio.emit('game_started', {'pin': pin, 'color': colors[0], 'opponent': guest_display}, to=h_sid)
+    sio.emit('game_started', {'pin': pin, 'color': colors[1], 'opponent': host_display},  to=g_sid)
     log.info(f'Game started {pin}: {host}({colors[0]}) vs {guest}({colors[1]})')
     _broadcast_rooms()
 

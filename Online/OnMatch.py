@@ -84,7 +84,7 @@ def launch_matchmaking(surface, screen_w, screen_h, username: str,
         if on_menu: on_menu()
         return
 
-    client.emit('join_queue', {'username': username})
+    client.emit('join_queue', {'username': username, 'display_name': display_name})
 
     # wait_for chạy trong thread riêng để không block UI
     match_data  = [None]
