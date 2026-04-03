@@ -224,6 +224,7 @@ def _run_online_game(surface, screen_w, screen_h,
             game.game_result = 1
             game.in_check    = False
             _save_match('win')
+            game.play_result_sound(my_color, my_color)   # mình thắng
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -308,10 +309,12 @@ def _run_online_game(surface, screen_w, screen_h,
         if game.is_over and not _match_saved:
             if game.winner == my_color:
                 _save_match('win')
+                game.play_result_sound(game.winner, my_color)
             elif game.winner is None:
                 _save_match('draw')
             else:
                 _save_match('loss')
+                game.play_result_sound(game.winner, my_color)
 
         surface.fill((18, 18, 30))
         flip = (my_color == 'black')

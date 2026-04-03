@@ -336,8 +336,10 @@ class Game:
                     else:                  ba = True
         if not ba:
             self.winner = 'white'; self.game_result = RESULT_KING_DEAD
+            self.play_result_sound('white')
         elif not wa:
             self.winner = 'black'; self.game_result = RESULT_KING_DEAD
+            self.play_result_sound('black')
 
     def _trigger_alert(self, text, color):
         self._alert_text  = text
@@ -381,16 +383,19 @@ class Game:
             self.config.move_sound.play()
 
     def play_result_sound(self, winner_color: str, my_color: str = None):
-        """Phát sound thắng/thua. my_color=None → dùng cho local (không phân biệt)."""
+        """
+        Phát sound kết quả.
+        my_color=None → local/bot: phát winner_sound cho bên thắng (không phân biệt)
+        my_color set  → online: phát winner hoặc lose theo góc nhìn người chơi
+        """
         try:
-            if my_color:
-                if winner_color == my_color:
-                    self.config.winner_sound.play()
-                else:
-                    self.config.lose_sound.play()
-            else:
-                # local/bot: phát winner cho bên thắng (không phân biệt góc nhìn)
+            if my_color is None:
+                # local: luôn phát winner sound (không quan tâm ai thắng)
                 self.config.winner_sound.play()
+            elif winner_color == my_color:
+                self.config.winner_sound.play()
+            else:
+                self.config.lose_sound.play()
         except Exception:
             pass
 
