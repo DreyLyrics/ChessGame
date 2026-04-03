@@ -473,8 +473,11 @@ def api_init():
 @app.route('/api/rooms', methods=['GET'])
 def api_rooms():
     """Lấy danh sách phòng đang mở từ DB."""
-    db = _get_db()
-    return {'ok': True, 'rooms': db.get_open_rooms()}
+    try:
+        db = _get_db()
+        return {'ok': True, 'rooms': db.get_open_rooms()}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}, 200
 
 @app.route('/api/message/send', methods=['POST'])
 def api_message_send():
