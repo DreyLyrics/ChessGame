@@ -57,26 +57,29 @@ def _fmt_date(val):
 # ── Ban Dialog ────────────────────────────────────────────────────────────────
 
 class BanDialog:
-    """Dialog nhỏ để chọn loại ban và thời gian."""
-    W, H = 360, 260
+    """Dialog chọn loại ban: vĩnh viễn hoặc có thời hạn (ngày/giờ/giây).
+    Nếu user đang bị ban, hiện thêm nút 'Go ban' ở góc trên phải.
+    result: None=cancel, {'ban_until': None}=vĩnh viễn,
+            {'ban_until': iso_str}=có hạn, {'unban': True}=gỡ ban.
+    """
+    W, H = 400, 290
 
-    def __init__(self, screen_w, screen_h, username):
-        self.screen_w = screen_w
-        self.screen_h = screen_h
-        self.username = username
-        self.result   = ...   # None=cancel, dict=confirm
+    def __init__(self, screen_w, screen_h, username, is_banned=False):
+        self.screen_w  = screen_w
+        self.screen_h  = screen_h
+        self.username  = username
+        self.is_banned = is_banned
+        self.result    = ...
 
         ox = screen_w // 2 - self.W // 2
         oy = screen_h // 2 - self.H // 2
         self.rect = pygame.Rect(ox, oy, self.W, self.H)
 
-        # loại ban
-        self.ban_type = 'permanent'   # 'permanent' | 'timed'
-
-        # input số ngày/giờ
-        self.days_str  = '1'
-        self.hours_str = '0'
-        self._focus    = None   # 'days' | 'hours'
+        self.ban_type   = 'permanent'
+        self.days_str   = '0'
+        self.hours_str  = '0'
+        self.secs_str   = '30'
+        self._focus     = None   # 'days'|'hours'|'secs'
 
         self._init_fonts()
         self._build_rects(ox, oy)
@@ -91,22 +94,27 @@ class BanDialog:
         self.f_small = pygame.font.SysFont('segoeui', 11)
 
     def _build_rects(self, ox, oy):
-        self.rb_perm  = pygame.Rect(ox + 20, oy + 60, 14, 14)
-        self.rb_timed = pygame.Rect(ox + 20, oy + 90, 14, 14)
+        self.rb_perm  = pygame.Rect(ox + 20, oy + 56, 14, 14)
+        self.rb_timed = pygame.Rect(ox + 20, oy + 84, 14, 14)
 
-        self.inp_days  = pygame.Rect(ox + 100, oy + 130, 70, 28)
-        self.inp_hours = pygame.Rect(ox + 220, oy + 130, 70, 28)
+        # 3 inputs: ngày | giờ | giây — hàng ngang
+        iw, ih = 72, 28
+        self.inp_days  = pygame.Rect(ox + 20,       oy + 128, iw, ih)
+        self.inp_hours = pygame.Rect(ox + 20 + iw + 14, oy + 128, iw, ih)
+        self.inp_secs  = pygame.Rect(ox + 20 + (iw + 14) * 2, oy + 128, iw, ih)
 
-        self.btn_ok     = pygame.Rect(ox + 20,        oy + self.H - 50, 150, 34)
-        self.btn_cancel = pygame.Rect(ox + self.W - 170, oy + self.H - 50, 150, 34)
+        self.btn_ok     = pygame.Rect(ox + 20,           oy + self.H - 52, 160, 36)
+        self.btn_cancel = pygame.Rect(ox + self.W - 180, oy + self.H - 52, 160, 36)
+
+        # nút gỡ ban — góc trên phải
+        self.btn_unban = pygame.Rect(ox + self.W - 96, oy + 10, 86, 28)
 
     def run(self, surface):
         clock = pygame.time.Clock()
         while self.result is ...:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    self.result = None
-                    break
+                    self.result = None; break
                 self._handle(event)
             self._draw(surface)
             pygame.display.flip()
@@ -116,15 +124,18 @@ class BanDialog:
     def _handle(self, event):
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                self.result = None
-                return
+                self.result = None; return
             if event.key == pygame.K_TAB:
-                self._focus = 'hours' if self._focus == 'days' else 'days'
+                order = ['days', 'hours', 'secs']
+                idx = order.index(self._focus) if self._focus in order else -1
+                self._focus = order[(idx + 1) % 3]
                 return
             if self._focus == 'days':
-                self.days_str = self._edit_num(self.days_str, event)
+                self.days_str  = self._edit_num(self.days_str,  event)
             elif self._focus == 'hours':
                 self.hours_str = self._edit_num(self.hours_str, event)
+            elif self._focus == 'secs':
+                self.secs_str  = self._edit_num(self.secs_str,  event)
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             pos = event.pos
@@ -136,10 +147,14 @@ class BanDialog:
                 self._focus = 'days'
             elif self.inp_hours.collidepoint(pos):
                 self._focus = 'hours'
+            elif self.inp_secs.collidepoint(pos):
+                self._focus = 'secs'
             elif self.btn_ok.collidepoint(pos):
                 self._confirm()
             elif self.btn_cancel.collidepoint(pos):
                 self.result = None
+            elif self.is_banned and self.btn_unban.collidepoint(pos):
+                self.result = {'unban': True}
             else:
                 self._focus = None
 
@@ -148,7 +163,7 @@ class BanDialog:
             return s[:-1] or '0'
         if event.unicode.isdigit():
             new = (s if s != '0' else '') + event.unicode
-            return new[:4]
+            return new[:5]
         return s
 
     def _confirm(self):
@@ -158,11 +173,12 @@ class BanDialog:
             try:
                 days  = int(self.days_str  or 0)
                 hours = int(self.hours_str or 0)
+                secs  = int(self.secs_str  or 0)
             except ValueError:
-                days, hours = 1, 0
-            delta = timedelta(days=days, hours=hours)
+                days, hours, secs = 0, 0, 30
+            delta = timedelta(days=days, hours=hours, seconds=secs)
             if delta.total_seconds() <= 0:
-                delta = timedelta(hours=1)
+                delta = timedelta(seconds=30)
             until = datetime.now(timezone.utc) + delta
             self.result = {'ban_until': until.isoformat()}
 
@@ -173,36 +189,42 @@ class BanDialog:
         pygame.draw.rect(surface, C_PANEL, self.rect, border_radius=12)
         pygame.draw.rect(surface, C_BAN_RED, self.rect, 2, border_radius=12)
 
+        # nút gỡ ban — góc trên phải (chỉ hiện nếu đang bị ban)
+        mouse = pygame.mouse.get_pos()
+        if self.is_banned:
+            ub = self.btn_unban
+            C_UNBAN    = (50, 180, 100)
+            C_UNBAN_HV = (70, 210, 120)
+            ub_bg = C_UNBAN_HV if ub.collidepoint(mouse) else C_UNBAN
+            pygame.draw.rect(surface, ub_bg, ub, border_radius=7)
+            pygame.draw.rect(surface, C_BORDER, ub, 1, border_radius=7)
+            ul = self.f_small.render('✔ Go ban', True, (255, 255, 255))
+            surface.blit(ul, ul.get_rect(center=ub.center))
+
         # tiêu đề
         t = self.f_title.render(f'Ban: {self.username}', True, C_BAN_RED)
-        surface.blit(t, t.get_rect(centerx=ox + self.W // 2, y=oy + 16))
+        surface.blit(t, t.get_rect(centerx=ox + self.W // 2, y=oy + 14))
 
         # radio permanent
         pygame.draw.circle(surface, C_BORDER, self.rb_perm.center, 7, 1)
         if self.ban_type == 'permanent':
             pygame.draw.circle(surface, C_BAN_RED, self.rb_perm.center, 4)
-        lbl = self.f_lbl.render('Ban vinh vien', True, C_TEXT)
-        surface.blit(lbl, (ox + 40, oy + 55))
+        surface.blit(self.f_lbl.render('Ban vinh vien', True, C_TEXT), (ox + 40, oy + 50))
 
         # radio timed
         pygame.draw.circle(surface, C_BORDER, self.rb_timed.center, 7, 1)
         if self.ban_type == 'timed':
             pygame.draw.circle(surface, C_ACCENT, self.rb_timed.center, 4)
-        lbl2 = self.f_lbl.render('Ban co thoi han', True, C_TEXT)
-        surface.blit(lbl2, (ox + 40, oy + 85))
+        surface.blit(self.f_lbl.render('Ban co thoi han', True, C_TEXT), (ox + 40, oy + 78))
 
         # inputs (chỉ hiện khi timed)
         if self.ban_type == 'timed':
-            # label
-            dl = self.f_small.render('Ngay:', True, C_TEXT_DIM)
-            surface.blit(dl, (ox + 20, oy + 118))
-            hl = self.f_small.render('Gio:', True, C_TEXT_DIM)
-            surface.blit(hl, (ox + 140, oy + 118))
-
-            for inp, val, key in [
-                (self.inp_days,  self.days_str,  'days'),
-                (self.inp_hours, self.hours_str, 'hours'),
-            ]:
+            labels = [('Ngay', self.inp_days), ('Gio', self.inp_hours), ('Giay', self.inp_secs)]
+            vals   = [self.days_str, self.hours_str, self.secs_str]
+            keys   = ['days', 'hours', 'secs']
+            for (lbl_txt, inp), val, key in zip(labels, vals, keys):
+                ll = self.f_small.render(lbl_txt + ':', True, C_TEXT_DIM)
+                surface.blit(ll, (inp.x, inp.y - 14))
                 bg = C_INPUT_FOCUS if self._focus == key else C_INPUT_BG
                 pygame.draw.rect(surface, bg, inp, border_radius=6)
                 pygame.draw.rect(surface, C_BORDER, inp, 1, border_radius=6)
@@ -211,23 +233,24 @@ class BanDialog:
 
             # preview
             try:
-                days  = int(self.days_str  or 0)
-                hours = int(self.hours_str or 0)
-                until = datetime.now(timezone.utc) + timedelta(days=days, hours=hours)
+                d = int(self.days_str or 0)
+                h = int(self.hours_str or 0)
+                s = int(self.secs_str or 0)
+                until = datetime.now(timezone.utc) + timedelta(days=d, hours=h, seconds=s)
                 prev  = self.f_small.render(
-                    f'Het han: {until.strftime("%d/%m/%Y %H:%M")} UTC', True, C_TEXT_DIM)
-                surface.blit(prev, (ox + 20, oy + 168))
+                    f'Het han: {until.strftime("%d/%m/%Y %H:%M:%S")} UTC', True, C_TEXT_DIM)
+                surface.blit(prev, (ox + 20, oy + 170))
             except Exception:
                 pass
         else:
             note = self.f_small.render('Tai khoan se bi khoa vinh vien.', True, C_TEXT_DIM)
-            surface.blit(note, (ox + 20, oy + 130))
+            surface.blit(note, (ox + 20, oy + 128))
 
         # buttons
         mouse = pygame.mouse.get_pos()
         for btn, label, base, hov in [
-            (self.btn_ok,     'Xac nhan Ban', C_BAN_RED,  C_BAN_HOV),
-            (self.btn_cancel, 'Huy',          C_PANEL2,   (70, 70, 100)),
+            (self.btn_ok,     'Xac nhan Ban', C_BAN_RED, C_BAN_HOV),
+            (self.btn_cancel, 'Huy',          C_PANEL2,  (70, 70, 100)),
         ]:
             bg = hov if btn.collidepoint(mouse) else base
             pygame.draw.rect(surface, bg, btn, border_radius=8)
@@ -436,11 +459,25 @@ class AdminModal:
         if uname == self.admin_username:
             self._show_msg('Khong the ban chinh minh', False); return
 
-        # lấy surface hiện tại
-        surface = pygame.display.get_surface()
-        dialog  = BanDialog(self.screen_w, self.screen_h, uname)
-        res     = dialog.run(surface)
+        surface    = pygame.display.get_surface()
+        is_banned  = u.get('role', '') == 'banned'
+        dialog     = BanDialog(self.screen_w, self.screen_h, uname, is_banned=is_banned)
+        res        = dialog.run(surface)
         if res is None:
+            return
+
+        # Gỡ ban
+        if res.get('unban'):
+            def _do_unban():
+                import DataSeverConfig as db
+                r = db.admin_set_role(uname, 'user')
+                if r.get('ok'):
+                    u['role']      = 'user'
+                    u['ban_until'] = None
+                    self._show_msg(f'Da go ban {uname}', True)
+                else:
+                    self._show_msg(r.get('error', 'Loi'), False)
+            threading.Thread(target=_do_unban, daemon=True).start()
             return
 
         ban_until = res.get('ban_until', None)
@@ -449,12 +486,12 @@ class AdminModal:
             import DataSeverConfig as db
             r = db.admin_ban_user(uname, ban_until)
             if r.get('ok'):
-                u['role'] = 'banned'
+                u['role']      = 'banned'
                 u['ban_until'] = ban_until
                 if ban_until:
                     try:
-                        dt = datetime.fromisoformat(ban_until)
-                        label = dt.strftime('%d/%m/%Y %H:%M')
+                        dt    = datetime.fromisoformat(ban_until)
+                        label = dt.strftime('%d/%m/%Y %H:%M:%S')
                     except Exception:
                         label = str(ban_until)
                     self._show_msg(f'Da ban {uname} den {label}', True)
