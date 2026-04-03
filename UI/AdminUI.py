@@ -109,6 +109,8 @@ class BanDialog:
         self.hours_str  = '0'
         self.secs_str   = '30'
         self._focus     = None   # 'days'|'hours'|'secs'
+        self._preview_until = None   # tính 1 lần khi input thay đổi, không chạy liên tục
+        self._recalc_preview()
 
         self._init_fonts()
         self._build_rects(ox, oy)
@@ -161,10 +163,13 @@ class BanDialog:
                 return
             if self._focus == 'days':
                 self.days_str  = self._edit_num(self.days_str,  event)
+                self._recalc_preview()
             elif self._focus == 'hours':
                 self.hours_str = self._edit_num(self.hours_str, event)
+                self._recalc_preview()
             elif self._focus == 'secs':
                 self.secs_str  = self._edit_num(self.secs_str,  event)
+                self._recalc_preview()
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             pos = event.pos
@@ -172,6 +177,7 @@ class BanDialog:
                 self.ban_type = 'permanent'
             elif self.rb_timed.collidepoint(pos):
                 self.ban_type = 'timed'
+                self._recalc_preview()
             elif self.inp_days.collidepoint(pos):
                 self._focus = 'days'
             elif self.inp_hours.collidepoint(pos):
@@ -194,6 +200,20 @@ class BanDialog:
             new = (s if s != '0' else '') + event.unicode
             return new[:5]
         return s
+
+    def _recalc_preview(self):
+        """Tính thời gian hết hạn một lần duy nhất khi input thay đổi."""
+        try:
+            d = int(self.days_str  or 0)
+            h = int(self.hours_str or 0)
+            s = int(self.secs_str  or 0)
+            delta = timedelta(days=d, hours=h, seconds=s)
+            if delta.total_seconds() <= 0:
+                delta = timedelta(seconds=30)
+            until_utc = datetime.now(timezone.utc) + delta
+            self._preview_until = until_utc.astimezone(VN_TZ).strftime('%d/%m/%Y %H:%M:%S')
+        except Exception:
+            self._preview_until = None
 
     def _confirm(self):
         if self.ban_type == 'permanent':
@@ -260,18 +280,11 @@ class BanDialog:
                 vl = self.f_lbl.render(val, True, C_TEXT)
                 surface.blit(vl, vl.get_rect(center=inp.center))
 
-            # preview giờ VN
-            try:
-                d = int(self.days_str or 0)
-                h = int(self.hours_str or 0)
-                s = int(self.secs_str or 0)
-                until_utc = datetime.now(timezone.utc) + timedelta(days=d, hours=h, seconds=s)
-                until_vn  = until_utc.astimezone(VN_TZ)
+            # preview — hiển thị thời gian đã tính sẵn, không chạy liên tục
+            if self._preview_until:
                 prev = self.f_small.render(
-                    f'Het han: {until_vn.strftime("%d/%m/%Y %H:%M:%S")} (VN)', True, C_TEXT_DIM)
+                    f'Het han: {self._preview_until} (VN)', True, C_TEXT_DIM)
                 surface.blit(prev, (ox + 20, oy + 170))
-            except Exception:
-                pass
         else:
             note = self.f_small.render('Tai khoan se bi khoa vinh vien.', True, C_TEXT_DIM)
             surface.blit(note, (ox + 20, oy + 128))
