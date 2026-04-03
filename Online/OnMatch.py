@@ -59,6 +59,14 @@ def launch_matchmaking(surface, screen_w, screen_h, username: str,
                        on_menu=None, apply_settings=None):
     from server_config import SERVER_URL
 
+    # lấy display_name từ DB
+    try:
+        import DataSeverConfig as _db
+        _u = _db.get_user(username)
+        display_name = (_u.get('display_name') or username) if _u else username
+    except Exception:
+        display_name = username
+
     pygame.font.init()
     f_title = pygame.font.SysFont('segoeui', 26, bold=True)
     f_sub   = pygame.font.SysFont('segoeui', 15)
@@ -119,6 +127,7 @@ def launch_matchmaking(surface, screen_w, screen_h, username: str,
         _run_online_game(
             surface, screen_w, screen_h,
             username,
+            display_name   = display_name,
             opponent       = match_data[0].get('opponent', 'Unknown'),
             my_color       = match_data[0].get('color', 'white'),
             pin            = match_data[0].get('pin', ''),
@@ -137,6 +146,7 @@ def launch_matchmaking(surface, screen_w, screen_h, username: str,
 def _run_online_game(surface, screen_w, screen_h,
                      username, opponent, my_color, pin,
                      client: SocketClient,
+                     display_name: str = '',
                      apply_settings=None):
     pygame.font.init()
     f_info  = pygame.font.SysFont('segoeui', 15, bold=True)
@@ -152,6 +162,8 @@ def _run_online_game(surface, screen_w, screen_h,
 
     _show_color_announce(surface, screen_w, screen_h,
                          'Trang ♔' if my_color == 'white' else 'Den ♚')
+
+    my_display = display_name or username   # tên hiển thị trong HUD
 
     exit_signal = None
     _match_saved = False   # tránh lưu 2 lần
@@ -315,7 +327,7 @@ def _run_online_game(surface, screen_w, screen_h,
         game.show_sidebar(surface)
         game.show_alert(surface)
         _draw_hud(surface, screen_w, screen_h,
-                  username, opponent, my_color, now_player, f_info, f_small)
+                  my_display, opponent, my_color, now_player, f_info, f_small)
         if game.is_over:
             game.show_gameover(surface)
             hint = f_small.render('Bam ESC hoac M de ve menu', True, C_DIM)

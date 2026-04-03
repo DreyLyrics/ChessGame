@@ -47,13 +47,13 @@ class MatchHistoryPanel:
     ROW_H = 56
 
     def __init__(self, x, y, w, h, user_id: int, username: str = ''):
-        self.rect     = pygame.Rect(x, y, w, h)
-        self.user_id  = user_id
-        self.username = username
-        self._history = []
-        self._scroll  = 0       # pixel offset
-        self._loaded  = False
-
+        self.rect         = pygame.Rect(x, y, w, h)
+        self.user_id      = user_id
+        self.username     = username
+        self.display_name = username   # sẽ được cập nhật khi load()
+        self._history     = []
+        self._scroll      = 0
+        self._loaded      = False
         self._init_fonts()
 
     def _init_fonts(self):
@@ -69,6 +69,10 @@ class MatchHistoryPanel:
         try:
             import DataSeverConfig as db
             self._history = db.get_match_history(self.user_id, limit)
+            # lấy display_name
+            user = db.get_user(self.username)
+            if user:
+                self.display_name = user.get('display_name') or self.username
         except Exception:
             self._history = []
         self._loaded = True
@@ -151,7 +155,7 @@ class MatchHistoryPanel:
         x += 22
 
         # ── tên người chơi vs đối thủ ──
-        me_lbl  = self.f_name.render(self.username or 'Ban', True, C_TEXT)
+        me_lbl  = self.f_name.render(self.display_name, True, C_TEXT)
         opp_lbl = self.f_sub.render(f'vs  {opp}', True, C_DIM)
         surface.blit(me_lbl,  (x, cy - 14))
         surface.blit(opp_lbl, (x, cy + 2))
