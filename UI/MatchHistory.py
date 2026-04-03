@@ -6,12 +6,31 @@ Dùng trong UserModal tab 'Lich su'.
 
 import pygame
 import os, sys
+from datetime import datetime, timedelta, timezone
 
 _HERE   = os.path.dirname(os.path.abspath(__file__))
 _ONLINE = os.path.join(os.path.dirname(_HERE), 'Online')
 for _p in (_HERE, _ONLINE):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+
+
+def _to_vn_date(dt_str: str) -> str:
+    """Chuyển UTC string → ngày giờ Việt Nam dạng 'DD/MM/YYYY HH:MM'."""
+    VN = timezone(timedelta(hours=7))
+    s  = str(dt_str)
+    try:
+        if ',' in s:
+            dt = datetime.strptime(s, '%a, %d %b %Y %H:%M:%S %Z')
+            dt = dt.replace(tzinfo=timezone.utc)
+        elif 'T' in s:
+            dt = datetime.fromisoformat(s.replace('Z', '+00:00'))
+        else:
+            dt = datetime.strptime(s[:19], '%Y-%m-%d %H:%M:%S')
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(VN).strftime('%d/%m/%Y %H:%M')
+    except Exception:
+        return s[:10]
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 C_BG        = (18,  18,  30)
@@ -146,7 +165,7 @@ class MatchHistoryPanel:
         color   = m.get('color', 'white')
         opp     = m.get('opponent', '?')
         moves   = m.get('moves', 0)
-        date_s  = str(m.get('played_at', ''))[:10]
+        date_s  = _to_vn_date(m.get('played_at', ''))
 
         # ── icon màu quân ──
         sq_c = C_WHITE_SQ if color == 'white' else C_BLACK_SQ

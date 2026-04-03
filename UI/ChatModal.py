@@ -24,6 +24,38 @@ C_SEND_BG   = ( 50, 130, 220)
 C_SEND_HOV  = ( 80, 160, 255)
 
 
+def _to_vn_time(sent_at_str: str, fmt: str = 'time') -> str:
+    """
+    Chuyển thời gian UTC từ server sang giờ Việt Nam (UTC+7).
+    fmt='time' → 'HH:MM'
+    fmt='datetime' → 'DD/MM HH:MM'
+    fmt='date' → 'DD/MM/YYYY'
+    """
+    from datetime import datetime, timedelta, timezone
+    VN = timezone(timedelta(hours=7))
+    s = str(sent_at_str)
+    try:
+        if ',' in s:
+            # RFC: "Fri, 03 Apr 2026 10:02:16 GMT"
+            dt = datetime.strptime(s, '%a, %d %b %Y %H:%M:%S %Z')
+            dt = dt.replace(tzinfo=timezone.utc)
+        elif 'T' in s:
+            dt = datetime.fromisoformat(s.replace('Z', '+00:00'))
+        else:
+            # "2026-04-03 10:02:16" — assume UTC
+            dt = datetime.strptime(s[:19], '%Y-%m-%d %H:%M:%S')
+            dt = dt.replace(tzinfo=timezone.utc)
+        dt_vn = dt.astimezone(VN)
+        if fmt == 'time':
+            return dt_vn.strftime('%H:%M')
+        elif fmt == 'datetime':
+            return dt_vn.strftime('%d/%m %H:%M')
+        else:
+            return dt_vn.strftime('%d/%m/%Y')
+    except Exception:
+        return s[:10] if fmt == 'date' else s[11:16]
+
+
 class ChatModal:
     W, H = 480, 520
 
@@ -241,21 +273,9 @@ class ChatModal:
             if ry + row_h < ma.y or ry > ma.bottom:
                 continue
 
-            is_me   = (msg['from_id'] == my_id)
-            content = msg.get('content', '')
-            sent_at = str(msg.get('sent_at', ''))
-            # parse "Fri, 03 Apr 2026 10:02:16 GMT" → "10:02"
-            # hoặc "2026-04-03 10:02:16" → "10:02"
-            try:
-                if ',' in sent_at:
-                    # dạng RFC: "Fri, 03 Apr 2026 10:02:16 GMT"
-                    time_part = sent_at.split(' ')[4][:5]
-                elif 'T' in sent_at:
-                    time_part = sent_at.split('T')[1][:5]
-                else:
-                    time_part = sent_at[11:16]
-            except Exception:
-                time_part = ''
+            is_me      = (msg['from_id'] == my_id)
+            content    = msg.get('content', '')
+            time_part  = _to_vn_time(msg.get('sent_at', ''), fmt='time')
 
             # bubble
             max_w = ma.w - 80
