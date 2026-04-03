@@ -29,6 +29,7 @@ _ONLINE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Online
 if _ONLINE not in sys.path:
     sys.path.insert(0, _ONLINE)
 import DataSeverConfig as db
+from MatchHistory import MatchHistoryPanel
 
 C_HISTORY_WIN  = ( 72, 199, 142)
 C_HISTORY_LOSS = (220,  80,  80)
@@ -92,8 +93,22 @@ class UserModal:
         self._overlay = pygame.Surface((screen_w, screen_h), pygame.SRCALPHA)
         self._overlay.fill(C_OVERLAY)
 
-        self._history     = db.get_match_history(user.get('id', 0), limit=15)
-        self._saved_user  = None   # sẽ được set sau khi lưu thành công
+        self._history     = db.get_match_history(user.get('id', 0), limit=50)
+        self._saved_user  = None
+
+        # panel lịch sử cuộn
+        mx = self.screen_w // 2 - self.W // 2
+        my = self.screen_h // 2 - self.H // 2
+        panel_y = my + 236 + 52   # bên dưới stats
+        self._history_panel = MatchHistoryPanel(
+            mx + 8, panel_y,
+            self.W - 16,
+            self.H - (panel_y - my) - 12,
+            user.get('id', 0),
+            user.get('username', '')
+        )
+        self._history_panel._history = self._history
+        self._history_panel._loaded  = True
 
         # load ảnh avatar nếu có
         self._avatar_surf = None
@@ -185,6 +200,8 @@ class UserModal:
     # ── events ────────────────────────────────────────────────────────────────
 
     def _handle(self, event):
+        if self._tab == 'history':
+            self._history_panel.handle_event(event)
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             self._result = self._saved_user   # trả về user đã lưu (hoặc None nếu chưa lưu)
             return
@@ -396,44 +413,11 @@ class UserModal:
             surface.blit(v_lbl, (sx, stat_y))
             surface.blit(l_lbl, (sx, stat_y + v_lbl.get_height() + 2))
 
-        # ── lịch sử ──
-        list_y = cy + 52
-        if not self._history:
-            lbl = self.f_label.render('Chua co lich su van dau.', True, C_TEXT_DIM)
-            surface.blit(lbl, lbl.get_rect(centerx=ox + self.W // 2, y=list_y + 10))
-            return
-
-        row_h   = 26
-        clip_r  = pygame.Rect(ox + 20, list_y, self.W - 40, self.H - (list_y - oy) - 16)
-        old_clip = surface.get_clip()
-        surface.set_clip(clip_r)
-
-        for i, m in enumerate(self._history):
-            ry = list_y + i * row_h
-            if ry > list_y + clip_r.height:
-                break
-            bg = (28, 28, 44) if i % 2 == 0 else (32, 32, 52)
-            pygame.draw.rect(surface, bg,
-                             pygame.Rect(ox + 20, ry, self.W - 40, row_h - 2))
-
-            res    = m['result']
-            rc     = C_HISTORY_WIN if res == 'win' else (
-                     C_HISTORY_LOSS if res == 'loss' else C_HISTORY_DRAW)
-            res_lbl = self.f_hist.render(res.upper(), True, rc)
-            surface.blit(res_lbl, (ox + 24, ry + 5))
-
-            opp_lbl = self.f_hist.render(f"vs {m['opponent']}", True, C_TEXT)
-            surface.blit(opp_lbl, (ox + 80, ry + 5))
-
-            col_lbl = self.f_hist.render(
-                'Trang' if m['color'] == 'white' else 'Den', True, C_TEXT_DIM)
-            surface.blit(col_lbl, (ox + 220, ry + 5))
-
-            mv_lbl = self.f_hist.render(f"{m['moves']} nuoc", True, C_TEXT_DIM)
-            surface.blit(mv_lbl, (ox + 300, ry + 5))
-
-            date = str(m['played_at'])[:10]
-            dt_lbl = self.f_hist.render(date, True, C_TEXT_DIM)
-            surface.blit(dt_lbl, (ox + 390, ry + 5))
-
-        surface.set_clip(old_clip)
+        # ── panel lịch sử cuộn ──
+        # cập nhật vị trí panel theo offset animation
+        panel = self._history_panel
+        panel.rect.x = ox + 8
+        panel.rect.y = oy + (cy - self.panel_rect.y) + 52
+        panel.rect.w = self.W - 16
+        panel.rect.h = self.H - (panel.rect.y - oy) - 12
+        panel.draw(surface)
