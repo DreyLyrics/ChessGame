@@ -201,7 +201,7 @@ def on_create_room(data):
     # lưu vào DB
     try:
         db = _get_db()
-        db.create_match_room(pin, username)
+        db.create_match_room(pin, username, display_name)
     except Exception:
         pass
     _broadcast_rooms()

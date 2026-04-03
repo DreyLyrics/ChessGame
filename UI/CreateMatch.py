@@ -26,6 +26,7 @@ class CreateMatch:
         self.screen_w=screen_w; self.screen_h=screen_h
         self.pin=pin; self.host=host; self.username=username
         self.display_name=display_name or username
+        self.host_display=host   # sẽ được cập nhật từ room_joined nếu có
         self.is_host=(username==host)
         self._client=client
         self._result=...; self._open_t=0
@@ -46,6 +47,18 @@ class CreateMatch:
         if data:
             self._game_color=data.get('color','white')
             self._game_ready.set()
+
+    def _poll_db_guest(self):
+        """Poll DB để lấy tên guest mới nhất."""
+        try:
+            import DataSeverConfig as db
+            rooms = db.get_open_rooms()
+            for r in rooms:
+                if r['pin'] == self.pin and r.get('guest'):
+                    self._guest = r['guest']
+                    break
+        except Exception:
+            pass
 
     def _init_fonts(self):
         self.f_title=pygame.font.SysFont('segoeui',18,bold=True)
@@ -70,19 +83,29 @@ class CreateMatch:
     def run(self, surface):
         self._result=...; self._open_t=pygame.time.get_ticks()
         clock=pygame.time.Clock()
+        self._last_db_poll = 0.0
+
         while self._result is ...:
             # kiểm tra game_started (từ thread wait)
             if self._game_ready.is_set():
                 self._result='start'; break
 
-            # poll các event khác (room_updated, room_closed, error)
+            # poll DB mỗi 5s để cập nhật guest (chỉ khi là host và chưa có guest)
+            if self.is_host and not self._guest:
+                now = time.time()
+                if now - self._last_db_poll >= 5.0:
+                    self._last_db_poll = now
+                    threading.Thread(target=self._poll_db_guest, daemon=True).start()
+
+            # poll socket events
             if self._client:
                 for ev,data in self._client.poll():
                     if ev=='room_updated':
                         self._guest=data.get('guest','')
                     elif ev=='room_joined':
-                        # host nhận khi guest vào
                         self._guest=data.get('guest','')
+                        if data.get('host_display'):
+                            self.host_display = data.get('host_display', self.host)
                     elif ev=='room_closed':
                         self._result='leave'
                     elif ev=='error':
@@ -166,7 +189,7 @@ class CreateMatch:
         pygame.draw.rect(surface,C_PANEL2,host_bg,border_radius=8)
         crown=self.f_player.render('👑',True,C_HOST_COLOR)
         surface.blit(crown,(host_bg.x+10,host_bg.centery-crown.get_height()//2))
-        hl=self.f_player.render(self.display_name if self.is_host else self.host,True,C_HOST_COLOR)
+        hl=self.f_player.render(self.display_name if self.is_host else self.host_display,True,C_HOST_COLOR)
         surface.blit(hl,(host_bg.x+38,host_bg.centery-hl.get_height()//2))
         rl=self.f_small.render('Chu phong',True,C_TEXT_DIM)
         surface.blit(rl,(host_bg.right-rl.get_width()-10,host_bg.centery-rl.get_height()//2))

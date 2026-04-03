@@ -92,29 +92,20 @@ def init_db():
             ''')
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS matches (
-                    id         SERIAL PRIMARY KEY,
-                    pin        TEXT    NOT NULL UNIQUE,
-                    host       TEXT    NOT NULL,
-                    guest      TEXT    DEFAULT '',
-                    status     TEXT    NOT NULL DEFAULT 'waiting',
-                    created_at TIMESTAMP DEFAULT NOW()
+                    id           SERIAL PRIMARY KEY,
+                    pin          TEXT    NOT NULL UNIQUE,
+                    host         TEXT    NOT NULL,
+                    host_display TEXT    DEFAULT '',
+                    guest        TEXT    DEFAULT '',
+                    status       TEXT    NOT NULL DEFAULT 'waiting',
+                    created_at   TIMESTAMP DEFAULT NOW()
                 )
             ''')
-            # migration: đảm bảo cột đúng
+            # migration: thêm host_display nếu chưa có
             cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='matches'")
             match_cols = [r[0] for r in cur.fetchall()]
-            if match_cols and 'pin' not in match_cols:
-                cur.execute('DROP TABLE IF EXISTS matches CASCADE')
-                cur.execute('''
-                    CREATE TABLE matches (
-                        id         SERIAL PRIMARY KEY,
-                        pin        TEXT    NOT NULL UNIQUE,
-                        host       TEXT    NOT NULL,
-                        guest      TEXT    DEFAULT '',
-                        status     TEXT    NOT NULL DEFAULT 'waiting',
-                        created_at TIMESTAMP DEFAULT NOW()
-                    )
-                ''')
+            if match_cols and 'host_display' not in match_cols:
+                cur.execute("ALTER TABLE matches ADD COLUMN host_display TEXT DEFAULT ''")
             # migration: đảm bảo cột đúng tên
             cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='messages'")
             msg_cols = [r[0] for r in cur.fetchall()]
@@ -414,15 +405,16 @@ def get_messages(user_id: int, friend_id: int, limit: int = 50) -> list:
 
 # ── Matches (phòng chờ) ───────────────────────────────────────────────────────
 
-def create_match_room(pin: str, host: str) -> dict:
+def create_match_room(pin: str, host: str, host_display: str = '') -> dict:
     """Tạo phòng mới vào DB."""
     try:
         with _connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    'INSERT INTO matches(pin, host, status) VALUES(%s,%s,%s) '
-                    'ON CONFLICT(pin) DO UPDATE SET host=%s, guest=%s, status=%s, created_at=NOW()',
-                    (pin, host, 'waiting', host, '', 'waiting')
+                    'INSERT INTO matches(pin, host, host_display, status) VALUES(%s,%s,%s,%s) '
+                    'ON CONFLICT(pin) DO UPDATE SET host=%s, host_display=%s, guest=%s, status=%s, created_at=NOW()',
+                    (pin, host, host_display or host, 'waiting',
+                     host, host_display or host, '', 'waiting')
                 )
             conn.commit()
         return {'ok': True}
@@ -459,7 +451,7 @@ def get_open_rooms() -> list:
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT pin, host, guest, created_at FROM matches "
+                "SELECT pin, host, host_display, guest, created_at FROM matches "
                 "WHERE status='waiting' ORDER BY created_at DESC LIMIT 20"
             )
             rows = cur.fetchall()
@@ -467,8 +459,9 @@ def get_open_rooms() -> list:
             result = []
             for r in rows:
                 d = dict(zip(cols, r))
-                # convert datetime → string để JSON serialize được
                 if d.get('created_at'):
                     d['created_at'] = str(d['created_at'])
+                # dùng host_display nếu có
+                d['host'] = d.get('host_display') or d.get('host', '')
                 result.append(d)
             return result
