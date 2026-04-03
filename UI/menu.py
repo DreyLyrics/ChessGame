@@ -41,6 +41,7 @@ class MenuScreen:
         self.clock   = pygame.time.Clock()
         self.result  = None
         self.W, self.H = screen.get_size()
+        self._notifier = None   # MessageNotifier, khởi tạo sau khi đăng nhập
 
         self._init_fonts()
         self._build_widgets(avatar_btn)
@@ -178,6 +179,29 @@ class MenuScreen:
         self.screen.blit(lbl, lbl.get_rect(
             centerx=self.W // 2, bottom=self.H - 12))
 
+    def _start_notifier(self):
+        """Khởi động notifier sau khi đăng nhập."""
+        try:
+            _UI_DIR = os.path.dirname(os.path.abspath(__file__))
+            if _UI_DIR not in sys.path:
+                sys.path.insert(0, _UI_DIR)
+            from AlarmMess import MessageNotifier
+            _ONLINE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Online')
+            if _ONLINE_DIR not in sys.path:
+                sys.path.insert(0, _ONLINE_DIR)
+            import DataSeverConfig as _db
+            user = _db.get_user(self.avatar_btn.username) or {}
+            uid  = user.get('id', 0)
+            if not uid:
+                return
+            friends = _db.get_friends(uid)
+            if self._notifier:
+                self._notifier.stop_polling()
+            self._notifier = MessageNotifier(self.W, self.H, uid, friends)
+            self._notifier.start_polling()
+        except Exception:
+            pass
+
     def draw(self):
         self._draw_bg()
         self._draw_title()
@@ -187,6 +211,10 @@ class MenuScreen:
         self._draw_btn_labels()
         self.avatar_btn.draw(self.screen)
         self._draw_footer()
+        # vẽ thông báo tin nhắn
+        if self._notifier:
+            self._notifier.update()
+            self._notifier.draw(self.screen)
 
     # ------------------------------------------------------------------ #
     #  EVENTS                                                              #
@@ -211,8 +239,15 @@ class MenuScreen:
 
             # avatar xử lý trước — nếu modal/dropdown đang mở thì chặn nút khác
             avatar_result = self.avatar_btn.handle_event(event)
+            # notifier xử lý click
+            if self._notifier:
+                self._notifier.handle_event(event)
             if avatar_result == 'modal_active':
                 continue   # bỏ qua PVP/PVE/Local khi modal đang mở
+
+            # khởi động notifier sau khi đăng nhập thành công
+            if isinstance(avatar_result, tuple) and avatar_result[0] == 'login':
+                self._start_notifier()
 
             if avatar_result == 'user_info':
                 # mở UserModal
