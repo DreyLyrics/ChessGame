@@ -1,5 +1,8 @@
 """
 UI/ModalOpPvp.py — kết nối Railway server thật.
+- Auto-refresh danh sách phòng từ DB mỗi 5 giây
+- Join bằng PIN kiểm tra DB trước
+- Tạo phòng → tự vào CreateMatch luôn
 """
 import pygame, os, sys, threading, time
 
@@ -17,6 +20,8 @@ C_CREATE_BG=(50,160,100); C_CREATE_HOV=(70,200,130)
 C_JOIN_BG=(60,130,220);   C_JOIN_HOV=(90,160,255)
 C_ROOM_ROW_A=(28,28,48);  C_ROOM_ROW_B=(34,34,56)
 
+REFRESH_INTERVAL = 5.0   # giây
+
 
 class ModalOpPvp:
     W, H = 520, 520
@@ -29,6 +34,8 @@ class ModalOpPvp:
         self._client: SocketClient|None=None
         self._my_pin=None; self._rooms=[]; self._connected=False
         self._connecting=True; self._connect_err=''
+        self._last_refresh=0.0   # timestamp lần refresh cuối
+
         self._init_fonts(); self._build()
         self._overlay=pygame.Surface((screen_w,screen_h),pygame.SRCALPHA)
         self._overlay.fill(C_OVERLAY)
@@ -38,12 +45,23 @@ class ModalOpPvp:
         try:
             c=SocketClient(SERVER_URL)
             if c.connect(timeout=10):
-                self._client=c; self._connected=True; c.emit('get_rooms')
+                self._client=c; self._connected=True
+                c.emit('get_rooms')
             else:
                 self._connect_err=f'Timeout: {SERVER_URL}'
         except Exception as e:
             self._connect_err=str(e)[:60]
         self._connecting=False
+
+    def _refresh_rooms_from_db(self):
+        """Load danh sách phòng từ DB (chạy trong thread)."""
+        try:
+            import DataSeverConfig as db
+            rooms = db.get_open_rooms()
+            # chuyển format DB → format hiển thị
+            self._rooms = [{'pin': r['pin'], 'host': r['host']} for r in rooms]
+        except Exception:
+            pass
 
     def _init_fonts(self):
         self.f_title=pygame.font.SysFont('segoeui',19,bold=True)
@@ -67,13 +85,22 @@ class ModalOpPvp:
     def run(self, surface):
         self._result=...; self._open_t=pygame.time.get_ticks()
         clock=pygame.time.Clock()
+
         while self._result is ...:
+            # ── auto-refresh từ DB mỗi 5 giây ──
+            now = time.time()
+            if now - self._last_refresh >= REFRESH_INTERVAL:
+                self._last_refresh = now
+                threading.Thread(target=self._refresh_rooms_from_db, daemon=True).start()
+
+            # ── poll socket events ──
             if self._client:
                 for ev,data in self._client.poll():
                     if ev=='room_created':
                         self._my_pin=data.get('pin','')
-                        self._msg=f'Phong tao: {self._my_pin}'; self._msg_ok=True
-                        self._client.emit('get_rooms')
+                        # tự vào CreateMatch luôn
+                        self._result={'action':'create','pin':self._my_pin,
+                                      'host':self.username,'client':self._client}
                     elif ev=='room_joined':
                         self._result={'action':'join','pin':data.get('pin',''),
                                       'host':data.get('host',''),'client':self._client}
@@ -81,11 +108,14 @@ class ModalOpPvp:
                         self._rooms=data.get('rooms',[])
                     elif ev=='error':
                         self._msg=data.get('msg','Loi server'); self._msg_ok=False
+
             if self._connect_err and not self._connecting:
                 self._msg=self._connect_err; self._msg_ok=False; self._connect_err=''
+
             for event in pygame.event.get():
                 if event.type==pygame.QUIT: self._cleanup(); self._result=None; break
                 self._handle(event)
+
             self._draw(surface); pygame.display.flip(); clock.tick(60)
         return self._result
 
@@ -112,13 +142,20 @@ class ModalOpPvp:
     def _do_join(self, pin):
         if not pin: self._msg='Vui long nhap ma PIN'; self._msg_ok=False; return
         if not self._client: self._msg='Chua ket noi server'; self._msg_ok=False; return
+        # kiểm tra PIN có trong DB không
+        try:
+            import DataSeverConfig as db
+            rooms = db.get_open_rooms()
+            pins_in_db = [r['pin'] for r in rooms]
+            if pin not in pins_in_db:
+                self._msg=f'Khong tim thay phong "{pin}"'; self._msg_ok=False; return
+        except Exception:
+            pass   # nếu lỗi DB thì vẫn thử join qua socket
         self._msg=f'Dang vao phong {pin}...'; self._msg_ok=True
         self._client.emit('join_room',{'pin':pin,'username':self.username,'display_name':self.display_name})
 
     def _do_create(self):
         if not self._client: self._msg='Chua ket noi server'; self._msg_ok=False; return
-        if self._my_pin:
-            self._result={'action':'create','pin':self._my_pin,'host':self.username,'client':self._client}; return
         self._msg='Dang tao phong...'; self._msg_ok=True
         self._client.emit('create_room',{'username':self.username,'display_name':self.display_name})
 
@@ -164,17 +201,17 @@ class ModalOpPvp:
         surface.blit(sep_lbl,sep_lbl.get_rect(centerx=ox+self.W//2,centery=sep_y))
         orig=self.btn_create.rect.copy(); self.btn_create.rect=self.btn_create.rect.move(dx,dy)
         self.btn_create.draw(surface,self.f_btn); self.btn_create.rect=orig
-        if self._my_pin:
-            pin_bg=pygame.Rect(ox+pad,oy+200,self.W-pad*2,26)
-            pygame.draw.rect(surface,C_PANEL2,pin_bg,border_radius=6)
-            pin_lbl=self.f_label.render(f'Ma PIN: {self._my_pin}  — chia se cho ban be',True,C_SUCCESS)
-            surface.blit(pin_lbl,pin_lbl.get_rect(center=pin_bg.center))
-        elif self._msg:
+        if self._msg:
             c=C_SUCCESS if self._msg_ok else C_ERROR
             ml=self.f_label.render(self._msg,True,c)
             surface.blit(ml,ml.get_rect(centerx=ox+self.W//2,y=oy+200))
+
+        # danh sách phòng từ DB
         list_y=oy+(self._list_rect.y-self.panel_rect.y)
-        hdr=self.f_label.render('Phong dang mo:',True,C_TEXT_DIM)
+        # hiện thời gian refresh tiếp theo
+        remaining = max(0, REFRESH_INTERVAL - (time.time() - self._last_refresh))
+        hdr_txt = f'Phong dang mo: (cap nhat sau {int(remaining)+1}s)'
+        hdr=self.f_label.render(hdr_txt,True,C_TEXT_DIM)
         surface.blit(hdr,(ox+pad,list_y-18))
         row_h=44
         clip_r=pygame.Rect(ox+pad,list_y,self.W-pad*2,self.H-(self._list_rect.y-self.panel_rect.y)-20)
