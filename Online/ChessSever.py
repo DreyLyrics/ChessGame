@@ -446,6 +446,13 @@ def api_friend_status():
 
 # ── Messages API ──────────────────────────────────────────────────────────────
 
+@app.route('/api/init', methods=['POST'])
+def api_init():
+    """Force tạo lại tất cả tables."""
+    db = _get_db()
+    db.init_db()
+    return {'ok': True, 'msg': 'Tables created'}
+
 @app.route('/api/message/send', methods=['POST'])
 def api_message_send():
     from flask import request as req
