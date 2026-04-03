@@ -430,9 +430,9 @@ class AdminModal:
                     break
                 self._handle(event)
 
-            # auto-reload mỗi 10s để cập nhật trạng thái ban từ server
+            # auto-reload mỗi 5s để cập nhật trạng thái ban từ server
             now = pygame.time.get_ticks()
-            if not self._loading and now - self._last_auto >= 10_000:
+            if not self._loading and now - self._last_auto >= 5_000:
                 self._last_auto = now
                 self._load_data()
             self._draw(surface)
