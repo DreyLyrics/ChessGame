@@ -449,4 +449,11 @@ def get_open_rooms() -> list:
             )
             rows = cur.fetchall()
             cols = [d.name for d in cur.description]
-            return [dict(zip(cols, r)) for r in rows]
+            result = []
+            for r in rows:
+                d = dict(zip(cols, r))
+                # convert datetime → string để JSON serialize được
+                if d.get('created_at'):
+                    d['created_at'] = str(d['created_at'])
+                result.append(d)
+            return result
