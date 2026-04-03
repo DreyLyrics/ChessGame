@@ -269,7 +269,7 @@ def _run_online_game(surface, screen_w, screen_h,
         _show_moves_flip(surface, game, flip)
         _show_pieces_flip(surface, game, flip)
         _show_hover_flip(surface, game, flip)
-        game.show_check(surface)
+        _show_check_flip(surface, game, flip)
         if dragger.dragging:
             dragger.update_blit(surface, game._img_cache)
         game.show_turn_panel(surface)
@@ -437,3 +437,23 @@ def _show_hover_flip(surface, game, flip):
     dc = _fc(game.hovered_sqr.col, flip)
     pygame.draw.rect(surface, (180, 180, 180),
                      (ox + dc * SQSIZE, oy + dr * SQSIZE, SQSIZE, SQSIZE), width=3)
+
+def _show_check_flip(surface, game, flip):
+    import math as _math
+    if not game.in_check:
+        return
+    from piece import King
+    ox, oy = BOARD_OFFSET_X, BOARD_OFFSET_Y
+    for row in range(ROWS):
+        for col in range(COLS):
+            p = game.board.squares[row][col].piece
+            if isinstance(p, King) and p.color == game.next_player:
+                dr = _fr(row, flip)
+                dc = _fc(col, flip)
+                t     = pygame.time.get_ticks() / 400.0
+                alpha = int(90 + 60 * _math.sin(t))
+                s     = pygame.Surface((SQSIZE, SQSIZE), pygame.SRCALPHA)
+                s.fill((220, 40, 40, alpha))
+                surface.blit(s, (ox + dc * SQSIZE, oy + dr * SQSIZE))
+                pygame.draw.rect(surface, (220, 50, 50),
+                                 (ox + dc * SQSIZE, oy + dr * SQSIZE, SQSIZE, SQSIZE), 3)

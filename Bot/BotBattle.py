@@ -166,7 +166,7 @@ class BotMain:
         self._show_moves_flip(s, flip)
         self._show_pieces_flip(s, flip)
         self._show_hover_flip(s, flip)
-        g.show_check(s)
+        self._show_check_flip(s, flip)
         if g.dragger.dragging:
             g.dragger.update_blit(s, g._img_cache)
 
@@ -240,6 +240,27 @@ class BotMain:
         dc = self._fc(g.hovered_sqr.col, flip)
         pygame.draw.rect(surface, (180, 180, 180),
                          (ox + dc * SQSIZE, oy + dr * SQSIZE, SQSIZE, SQSIZE), width=3)
+
+    def _show_check_flip(self, surface, flip):
+        import math as _math
+        g = self.game
+        if not g.in_check:
+            return
+        ox, oy = BOARD_OFFSET_X, BOARD_OFFSET_Y
+        from piece import King
+        for row in range(ROWS):
+            for col in range(COLS):
+                p = g.board.squares[row][col].piece
+                if isinstance(p, King) and p.color == g.next_player:
+                    dr = self._fr(row, flip)
+                    dc = self._fc(col, flip)
+                    t     = pygame.time.get_ticks() / 400.0
+                    alpha = int(90 + 60 * _math.sin(t))
+                    s     = pygame.Surface((SQSIZE, SQSIZE), pygame.SRCALPHA)
+                    s.fill((220, 40, 40, alpha))
+                    surface.blit(s, (ox + dc * SQSIZE, oy + dr * SQSIZE))
+                    pygame.draw.rect(surface, (220, 50, 50),
+                                     (ox + dc * SQSIZE, oy + dr * SQSIZE, SQSIZE, SQSIZE), 3)
 
     # ── bot ───────────────────────────────────────────────────────────────────
 
