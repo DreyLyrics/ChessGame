@@ -108,8 +108,10 @@ class BanDialog:
         self.days_str   = '0'
         self.hours_str  = '0'
         self.secs_str   = '30'
-        self._focus     = None   # 'days'|'hours'|'secs'
-        self._preview_until = None   # tính 1 lần khi input thay đổi, không chạy liên tục
+        self._focus     = None
+        self._preview_until = None
+        # thời điểm mở dialog — cố định, không thay đổi
+        self._open_time = datetime.now(timezone.utc)
         self._recalc_preview()
 
         self._init_fonts()
@@ -202,16 +204,17 @@ class BanDialog:
         return s
 
     def _recalc_preview(self):
-        """Tính thời gian hết hạn một lần duy nhất khi input thay đổi."""
+        """Tính thời gian hết hạn dựa trên _open_time cố định + delta nhập vào."""
         try:
             d = int(self.days_str  or 0)
             h = int(self.hours_str or 0)
             s = int(self.secs_str  or 0)
             delta = timedelta(days=d, hours=h, seconds=s)
             if delta.total_seconds() <= 0:
-                delta = timedelta(seconds=30)
-            until_utc = datetime.now(timezone.utc) + delta
-            self._preview_until = until_utc.astimezone(VN_TZ).strftime('%d/%m/%Y %H:%M:%S')
+                self._preview_until = None
+                return
+            until_vn = (self._open_time + delta).astimezone(VN_TZ)
+            self._preview_until = until_vn.strftime('%d/%m/%Y %H:%M:%S')
         except Exception:
             self._preview_until = None
 
@@ -228,7 +231,8 @@ class BanDialog:
             delta = timedelta(days=days, hours=hours, seconds=secs)
             if delta.total_seconds() <= 0:
                 delta = timedelta(seconds=30)
-            until_utc = datetime.now(timezone.utc) + delta
+            # dùng _open_time để khớp với preview đã hiển thị
+            until_utc = self._open_time + delta
             self.result = {'ban_until': until_utc.isoformat()}
 
     def _draw(self, surface):
