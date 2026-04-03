@@ -98,7 +98,6 @@ class ChatModal:
         self._open_t = pygame.time.get_ticks()
         clock = pygame.time.Clock()
         while self._result is ...:
-            # auto-refresh
             now = time.time()
             if now - self._last_refresh > 3 and not self._loading:
                 self._last_refresh = now
@@ -106,32 +105,46 @@ class ChatModal:
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    self._result = None
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        self._result = None
+                    self._result = None; break
+
+                # đóng modal
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    self._result = None; break
+
+                # Enter gửi
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                    self._send()
+                    continue   # không truyền Enter xuống field
+
+                # scroll
                 if event.type == pygame.MOUSEWHEEL:
                     if self._msg_area.collidepoint(pygame.mouse.get_pos()):
                         self._scroll = max(0, self._scroll - event.y * 20)
-                self._handle(event)
-                # Enter gửi tin nhắn (sau khi field đã xử lý)
-                if event.type == pygame.KEYDOWN:
-                    if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                        self._send()
 
+                # click đóng / ngoài panel
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if self.btn_close.collidepoint(event.pos):
+                        self._result = None; break
+                    if not self.panel_rect.collidepoint(event.pos):
+                        self._result = None; break
+
+                # nút gửi
+                if self.btn_send.handle_event(event):
+                    self._send()
+                    self.field_input.active = True   # giữ focus
+                    continue
+
+                # field input
+                self.field_input.handle_event(event)
+
+            self.field_input.update()
             self._draw(surface)
             pygame.display.flip()
             clock.tick(60)
 
-    def _handle(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            if self.btn_close.collidepoint(event.pos):
-                self._result = None; return
-            if not self.panel_rect.collidepoint(event.pos):
-                self._result = None; return
-        if self.btn_send.handle_event(event):
-            self._send(); return
-        self.field_input.handle_event(event)
+            self._draw(surface)
+            pygame.display.flip()
+            clock.tick(60)
 
     def _send(self):
         text = self.field_input.text.strip()
@@ -142,9 +155,13 @@ class ChatModal:
             res = db.send_message(self.me['id'], self.friend['id'], text)
             if res.get('ok'):
                 self.field_input.clear()
+                self.field_input.active = True
+                self._loading = False
                 threading.Thread(target=self._load_messages, daemon=True).start()
-        except Exception:
-            pass
+            else:
+                print(f'[Chat] send error: {res}')
+        except Exception as e:
+            print(f'[Chat] exception: {e}')
 
     def _draw(self, surface):
         surface.blit(self._overlay, (0, 0))
