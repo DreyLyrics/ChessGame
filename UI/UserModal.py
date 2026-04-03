@@ -107,6 +107,7 @@ class UserModal:
             user.get('id', 0),
             user.get('username', '')
         )
+        self._history_panel.display_name = user.get('display_name') or user.get('username', '')
         self._history_panel._history = self._history
         self._history_panel._loaded  = True
 
