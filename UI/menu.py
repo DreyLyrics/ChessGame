@@ -195,11 +195,19 @@ class MenuScreen:
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
+                from OutMenu import OutMenu
+                choice = OutMenu(self.W, self.H).run(self.screen)
+                if choice == 'quit':
+                    pygame.quit()
+                    sys.exit()
+                continue
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                pygame.quit()
-                sys.exit()
+                from OutMenu import OutMenu
+                choice = OutMenu(self.W, self.H).run(self.screen)
+                if choice == 'quit':
+                    pygame.quit()
+                    sys.exit()
+                continue
 
             # avatar xử lý trước — nếu modal/dropdown đang mở thì chặn nút khác
             avatar_result = self.avatar_btn.handle_event(event)
