@@ -121,3 +121,10 @@ def send_message(from_id: int, to_id: int, content: str) -> dict:
 def get_messages(user_id: int, friend_id: int, limit: int = 50) -> list:
     res = _get('/message/history', {'user_id': user_id, 'friend_id': friend_id, 'limit': limit})
     return res.get('messages', []) if res.get('ok') else []
+
+
+# ── Matches (phòng chờ) ───────────────────────────────────────────────────────
+
+def get_open_rooms() -> list:
+    res = _get('/rooms')
+    return res.get('rooms', []) if res.get('ok') else []

@@ -122,6 +122,11 @@ def _handle_leave(sid: str, pin: str):
         sio.emit('room_closed', {'pin': pin})
         if guest_sid:
             sio.emit('room_closed', {'pin': pin}, to=guest_sid)
+        # xóa phòng khỏi DB
+        try:
+            _get_db().delete_match_room(pin)
+        except Exception:
+            pass
     else:
         sio.emit('room_updated', _room_info(pin), to=pin)
     _broadcast_rooms()
@@ -192,6 +197,12 @@ def on_create_room(data):
     sio_join(pin)
     emit('room_created', {'pin': pin})
     log.info(f'{username} created room {pin}')
+    # lưu vào DB
+    try:
+        db = _get_db()
+        db.create_match_room(pin, username)
+    except Exception:
+        pass
     _broadcast_rooms()
 
 @sio.on('join_room')
@@ -216,6 +227,12 @@ def on_join_room(data):
     emit('room_joined', info)
     sio.emit('room_updated', info, to=pin)
     log.info(f'{username} joined room {pin}')
+    # cập nhật guest vào DB
+    try:
+        db = _get_db()
+        db.update_match_room(pin, guest=username, status='playing')
+    except Exception:
+        pass
     _broadcast_rooms()
 
 @sio.on('leave_room')
@@ -452,6 +469,12 @@ def api_init():
     db = _get_db()
     db.init_db()
     return {'ok': True, 'msg': 'Tables created'}
+
+@app.route('/api/rooms', methods=['GET'])
+def api_rooms():
+    """Lấy danh sách phòng đang mở từ DB."""
+    db = _get_db()
+    return {'ok': True, 'rooms': db.get_open_rooms()}
 
 @app.route('/api/message/send', methods=['POST'])
 def api_message_send():

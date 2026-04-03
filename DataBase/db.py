@@ -90,6 +90,16 @@ def init_db():
                     sent_at  TIMESTAMP DEFAULT NOW()
                 )
             ''')
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS matches (
+                    id         SERIAL PRIMARY KEY,
+                    pin        TEXT    NOT NULL UNIQUE,
+                    host       TEXT    NOT NULL,
+                    guest      TEXT    DEFAULT '',
+                    status     TEXT    NOT NULL DEFAULT 'waiting',
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            ''')
             # migration: đảm bảo cột đúng tên
             cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='messages'")
             msg_cols = [r[0] for r in cur.fetchall()]
@@ -385,3 +395,58 @@ def get_messages(user_id: int, friend_id: int, limit: int = 50) -> list:
             rows = cur.fetchall()
             cols = [d.name for d in cur.description]
             return list(reversed([dict(zip(cols, r)) for r in rows]))
+
+
+# ── Matches (phòng chờ) ───────────────────────────────────────────────────────
+
+def create_match_room(pin: str, host: str) -> dict:
+    """Tạo phòng mới vào DB."""
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    'INSERT INTO matches(pin, host, status) VALUES(%s,%s,%s) '
+                    'ON CONFLICT(pin) DO UPDATE SET host=%s, guest=%s, status=%s, created_at=NOW()',
+                    (pin, host, 'waiting', host, '', 'waiting')
+                )
+            conn.commit()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+def update_match_room(pin: str, guest: str = None, status: str = None) -> dict:
+    """Cập nhật guest hoặc status của phòng."""
+    fields, vals = [], []
+    if guest  is not None: fields.append('guest=%s');  vals.append(guest)
+    if status is not None: fields.append('status=%s'); vals.append(status)
+    if not fields:
+        return {'ok': False, 'error': 'Nothing to update'}
+    vals.append(pin)
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(f'UPDATE matches SET {",".join(fields)} WHERE pin=%s', vals)
+        conn.commit()
+    return {'ok': True}
+
+
+def delete_match_room(pin: str) -> dict:
+    """Xóa phòng khỏi DB (khi host thoát)."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute('DELETE FROM matches WHERE pin=%s', (pin,))
+        conn.commit()
+    return {'ok': True}
+
+
+def get_open_rooms() -> list:
+    """Lấy danh sách phòng đang chờ (status='waiting')."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT pin, host, guest, created_at FROM matches "
+                "WHERE status='waiting' ORDER BY created_at DESC LIMIT 20"
+            )
+            rows = cur.fetchall()
+            cols = [d.name for d in cur.description]
+            return [dict(zip(cols, r)) for r in rows]
