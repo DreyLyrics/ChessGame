@@ -367,11 +367,12 @@ class MenuScreen:
                                 sys.path.insert(0, _ONLINE)
                             from OnMatch import _run_online_game
                             my_color = cm._game_color or 'white'
-                            # host thấy guest, guest thấy host
-                            opponent = cm._guest if not is_guest else host
+                            # opponent: host thấy guest_display, guest thấy host_display
+                            opponent = cm._guest if not is_guest else cm.host_display
                             _run_online_game(
                                 self.screen, self.W, self.H,
-                                uname, opponent, my_color, pin, client)
+                                uname, opponent, my_color, pin, client,
+                                display_name=dname)
             if self.btn_pve.handle_event(event):
                 self.result = 'pve'
             if self.btn_local.handle_event(event):
