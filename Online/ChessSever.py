@@ -231,7 +231,7 @@ def on_join_room(data):
     # cập nhật guest vào DB (status vẫn là 'waiting')
     try:
         db = _get_db()
-        db.update_match_room(pin, guest=username)
+        db.update_match_room(pin, guest=username, guest_display=display_name)
     except Exception:
         pass
     _broadcast_rooms()

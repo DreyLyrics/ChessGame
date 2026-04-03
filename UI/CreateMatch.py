@@ -54,8 +54,10 @@ class CreateMatch:
             import DataSeverConfig as db
             rooms = db.get_open_rooms()
             for r in rooms:
-                if r['pin'] == self.pin and r.get('guest'):
-                    self._guest = r['guest']
+                if r['pin'] == self.pin:
+                    guest = r.get('guest_display') or r.get('guest', '')
+                    if guest:
+                        self._guest = guest
                     break
         except Exception:
             pass
@@ -102,6 +104,8 @@ class CreateMatch:
                 for ev,data in self._client.poll():
                     if ev=='room_updated':
                         self._guest=data.get('guest','')
+                        if data.get('host_display'):
+                            self.host_display = data['host_display']
                     elif ev=='room_joined':
                         self._guest=data.get('guest','')
                         if data.get('host_display'):

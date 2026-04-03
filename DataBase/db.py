@@ -97,15 +97,18 @@ def init_db():
                     host         TEXT    NOT NULL,
                     host_display TEXT    DEFAULT '',
                     guest        TEXT    DEFAULT '',
+                    guest_display TEXT   DEFAULT '',
                     status       TEXT    NOT NULL DEFAULT 'waiting',
                     created_at   TIMESTAMP DEFAULT NOW()
                 )
             ''')
-            # migration: thêm host_display nếu chưa có
+            # migration: thêm cột mới nếu chưa có
             cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='matches'")
             match_cols = [r[0] for r in cur.fetchall()]
-            if match_cols and 'host_display' not in match_cols:
-                cur.execute("ALTER TABLE matches ADD COLUMN host_display TEXT DEFAULT ''")
+            for col, defn in [('host_display', "TEXT DEFAULT ''"),
+                               ('guest_display', "TEXT DEFAULT ''")]:
+                if match_cols and col not in match_cols:
+                    cur.execute(f'ALTER TABLE matches ADD COLUMN {col} {defn}')
             # migration: đảm bảo cột đúng tên
             cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='messages'")
             msg_cols = [r[0] for r in cur.fetchall()]
@@ -422,11 +425,12 @@ def create_match_room(pin: str, host: str, host_display: str = '') -> dict:
         return {'ok': False, 'error': str(e)}
 
 
-def update_match_room(pin: str, guest: str = None, status: str = None) -> dict:
+def update_match_room(pin: str, guest: str = None, guest_display: str = None, status: str = None) -> dict:
     """Cập nhật guest hoặc status của phòng."""
     fields, vals = [], []
-    if guest  is not None: fields.append('guest=%s');  vals.append(guest)
-    if status is not None: fields.append('status=%s'); vals.append(status)
+    if guest         is not None: fields.append('guest=%s');         vals.append(guest)
+    if guest_display is not None: fields.append('guest_display=%s'); vals.append(guest_display)
+    if status        is not None: fields.append('status=%s');        vals.append(status)
     if not fields:
         return {'ok': False, 'error': 'Nothing to update'}
     vals.append(pin)
@@ -451,7 +455,7 @@ def get_open_rooms() -> list:
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT pin, host, host_display, guest, created_at FROM matches "
+                "SELECT pin, host, host_display, guest, guest_display, created_at FROM matches "
                 "WHERE status='waiting' ORDER BY created_at DESC LIMIT 20"
             )
             rows = cur.fetchall()
