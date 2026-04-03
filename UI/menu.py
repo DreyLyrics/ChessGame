@@ -194,6 +194,8 @@ class MenuScreen:
             uid  = user.get('id', 0)
             if not uid:
                 return
+            # lưu user_id vào avatar_btn để dùng trong handle_event
+            self.avatar_btn._user_id = uid
             friends = _db.get_friends(uid)
             if self._notifier:
                 self._notifier.stop_polling()
@@ -241,7 +243,12 @@ class MenuScreen:
             avatar_result = self.avatar_btn.handle_event(event)
             # notifier xử lý click
             if self._notifier:
-                self._notifier.handle_event(event)
+                me_data = {
+                    'id':           getattr(self.avatar_btn, '_user_id', 0),
+                    'username':     self.avatar_btn.username,
+                    'display_name': self.avatar_btn.display_name,
+                }
+                self._notifier.handle_event(event, me=me_data, surface=self.screen)
             if avatar_result == 'modal_active':
                 continue   # bỏ qua PVP/PVE/Local khi modal đang mở
 

@@ -46,18 +46,22 @@ class _Toast:
     W, H     = 280, 64
     SLIDE_MS = 300    # ms animation trượt vào
 
-    def __init__(self, sender: str, preview: str, screen_w: int, screen_h: int, idx: int = 0):
-        self.sender    = sender
-        self.preview   = preview[:40] + ('...' if len(preview) > 40 else '')
-        self.screen_w  = screen_w
-        self.screen_h  = screen_h
-        self.idx       = idx       # vị trí stack (0 = dưới cùng)
-        self._born     = pygame.time.get_ticks()
-        self._closed   = False
+    def __init__(self, sender: str, preview: str, screen_w: int, screen_h: int,
+                 idx: int = 0, friend_data: dict = None):
+        self.sender      = sender
+        self.preview     = preview[:40] + ('...' if len(preview) > 40 else '')
+        self.screen_w    = screen_w
+        self.screen_h    = screen_h
+        self.idx         = idx
+        self.friend_data = friend_data or {}   # {'id', 'username', 'display_name'}
+        self._born       = pygame.time.get_ticks()
+        self._closed     = False
+        self._clicked    = False   # True khi người dùng click vào body toast
 
         self._font_name    = pygame.font.SysFont('segoeui', 13, bold=True)
         self._font_preview = pygame.font.SysFont('segoeui', 12)
         self._font_close   = pygame.font.SysFont('segoeui', 12, bold=True)
+        self._font_bell    = pygame.font.SysFont('segoeui', 18, bold=True)
 
     @property
     def alive(self):
@@ -102,11 +106,19 @@ class _Toast:
         bar.fill((100, 160, 255, alpha))
         bg.blit(bar, (8, 8))
 
-        # icon 💬
-        f_icon = pygame.font.SysFont('segoeui', 18)
-        icon   = f_icon.render('💬', True, (100, 160, 255))
-        icon.set_alpha(alpha)
-        bg.blit(icon, (18, self.H // 2 - icon.get_height() // 2))
+        # icon chuông (vẽ bằng pygame, không dùng emoji)
+        bell_cx, bell_cy = 26, self.H // 2
+        # thân chuông
+        pygame.draw.arc(bg, (100, 160, 255, alpha),
+                        pygame.Rect(bell_cx - 9, bell_cy - 10, 18, 16),
+                        0, 3.14159, 3)
+        pygame.draw.rect(bg, (100, 160, 255, alpha),
+                         pygame.Rect(bell_cx - 9, bell_cy - 2, 18, 6))
+        # tay cầm
+        pygame.draw.circle(bg, (100, 160, 255, alpha), (bell_cx, bell_cy + 8), 3)
+        # đỉnh
+        pygame.draw.line(bg, (100, 160, 255, alpha),
+                         (bell_cx - 2, bell_cy - 10), (bell_cx + 2, bell_cy - 10), 2)
 
         # tên người gửi
         name_lbl = self._font_name.render(self.sender, True, (220, 220, 255))
@@ -132,14 +144,23 @@ class _Toast:
 
         surface.blit(bg, rect.topleft)
 
-    def handle_click(self, pos) -> bool:
-        """Trả về True nếu click vào nút X."""
+    def handle_click(self, pos) -> str | None:
+        """
+        Trả về:
+          'close'     — click nút X
+          'open_chat' — click vào body toast
+          None        — không click vào toast
+        """
         rect = self.get_rect()
+        if not rect.collidepoint(pos):
+            return None
         x_rect = pygame.Rect(rect.right - 22, rect.top + 2, 20, 20)
         if x_rect.collidepoint(pos):
             self.close()
-            return True
-        return False
+            return 'close'
+        # click vào body → mở chat
+        self.close()
+        return 'open_chat'
 
 
 # ── MessageNotifier ───────────────────────────────────────────────────────────
@@ -205,18 +226,18 @@ class MessageNotifier:
                     self._last_msg_id[f['id']] = msgs[-1]['id']
                     sender = f.get('display_name') or f.get('username', '?')
                     preview = new_msgs[-1].get('content', '')
-                    self._add_toast(sender, preview)
+                    self._add_toast(sender, preview, friend_data=f)
         except Exception:
             pass
 
-    def _add_toast(self, sender: str, preview: str):
+    def _add_toast(self, sender: str, preview: str, friend_data: dict = None):
         _play_sound()
         with self._lock:
-            # giới hạn 3 toast cùng lúc
             if len(self._toasts) >= 3:
                 self._toasts.pop(0)
             idx = len(self._toasts)
-            self._toasts.append(_Toast(sender, preview, self.screen_w, self.screen_h, idx))
+            self._toasts.append(_Toast(sender, preview, self.screen_w, self.screen_h,
+                                       idx, friend_data=friend_data))
 
     def update(self):
         """Gọi mỗi frame — dọn toast đã hết hạn và cập nhật idx."""
@@ -230,12 +251,28 @@ class MessageNotifier:
             for toast in self._toasts:
                 toast.draw(surface)
 
-    def handle_event(self, event):
+    def handle_event(self, event, me: dict = None, surface=None):
+        """
+        me: {'id', 'username', 'display_name'} — thông tin người dùng hiện tại
+        surface: pygame surface để vẽ ChatModal
+        """
         if event.type == pygame.MOUSEBUTTONDOWN:
             with self._lock:
-                for toast in self._toasts:
-                    toast.handle_click(event.pos)
+                toasts = list(self._toasts)
+            for toast in toasts:
+                action = toast.handle_click(event.pos)
+                if action == 'open_chat' and me and surface and toast.friend_data:
+                    try:
+                        import sys, os
+                        _ui = os.path.join(os.path.dirname(os.path.abspath(__file__)))
+                        if _ui not in sys.path:
+                            sys.path.insert(0, _ui)
+                        from ChatModal import ChatModal
+                        ChatModal(self.screen_w, self.screen_h, me, toast.friend_data).run(surface)
+                    except Exception as e:
+                        print(f'[AlarmMess] open chat error: {e}')
+                    break
 
-    def notify(self, sender: str, preview: str):
+    def notify(self, sender: str, preview: str, friend_data: dict = None):
         """Gọi thủ công để test hoặc thêm thông báo từ ngoài."""
-        self._add_toast(sender, preview)
+        self._add_toast(sender, preview, friend_data=friend_data)
