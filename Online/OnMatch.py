@@ -197,8 +197,19 @@ def _run_online_game(surface, screen_w, screen_h,
                 client.disconnect(); return
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_ESCAPE, pygame.K_m):
-                    client.emit('game_over', {'pin': pin, 'result': 'disconnect'})
-                    client.disconnect(); exit_signal = 'menu'; break
+                    # hiện modal xác nhận thoát
+                    import sys as _sys
+                    _ui = os.path.join(_ROOT, 'UI')
+                    if _ui not in _sys.path:
+                        _sys.path.insert(0, _ui)
+                    from OutModal import OutModal
+                    choice = OutModal(screen_w, screen_h).run(surface)
+                    if choice == 'quit':
+                        client.emit('game_over', {'pin': pin, 'result': 'disconnect'})
+                        client.disconnect()
+                        exit_signal = 'menu'
+                        break
+                    # 'continue' → tiếp tục chơi, không làm gì
 
             if game.is_over:
                 if event.type == pygame.MOUSEBUTTONDOWN:
