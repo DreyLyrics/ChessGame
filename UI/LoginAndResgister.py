@@ -739,6 +739,11 @@ class AvatarButton:
         """
         if self._state == 'idle':
             if event.type == pygame.MOUSEBUTTONDOWN:
+                # kiểm tra click vào friend button trước
+                if self.logged_in:
+                    (fx, fy), fr = self._friend_btn_pos()
+                    if math.hypot(event.pos[0] - fx, event.pos[1] - fy) <= fr + 4:
+                        return 'friend'
                 if math.hypot(event.pos[0] - self.cx,
                               event.pos[1] - self.cy) <= self.RADIUS + 4:
                     self._open_dropdown()
@@ -813,7 +818,6 @@ class AvatarButton:
 
     def draw(self, surface):
         if self._avatar_surf and self.logged_in:
-            # vẽ ảnh tròn
             surface.blit(self._avatar_surf, (self.cx - self.RADIUS, self.cy - self.RADIUS))
             pygame.draw.circle(surface, C_ACCENT_HOV, (self.cx, self.cy), self.RADIUS, 2)
         else:
@@ -826,12 +830,31 @@ class AvatarButton:
             lbl = self._font_user.render(label, True, C_TEXT_DIM)
             surface.blit(lbl, (self.cx - lbl.get_width() - self.RADIUS - 6,
                                self.cy - lbl.get_height() // 2))
+            # ── Friend button — bên dưới avatar ──
+            self._draw_friend_btn(surface)
 
         if self._state == 'dropdown' and self._dropdown:
             self._dropdown.draw(surface)
 
         if self._state == 'modal' and self._modal:
             self._modal.draw(surface)
+
+    def _friend_btn_pos(self):
+        """Tâm nút kết bạn — bên dưới avatar."""
+        fr = 16   # radius nút nhỏ hơn
+        return (self.cx, self.cy + self.RADIUS + 8 + fr), fr
+
+    def _draw_friend_btn(self, surface):
+        (fx, fy), fr = self._friend_btn_pos()
+        mouse = pygame.mouse.get_pos()
+        hovered = math.hypot(mouse[0] - fx, mouse[1] - fy) <= fr + 2
+        bg = (80, 160, 100) if hovered else (50, 120, 75)
+        pygame.draw.circle(surface, bg, (fx, fy), fr)
+        pygame.draw.circle(surface, (100, 220, 140), (fx, fy), fr, 2)
+        # icon: người + dấu +
+        f = pygame.font.SysFont('segoeui', fr, bold=True)
+        lbl = f.render('+', True, (255, 255, 255))
+        surface.blit(lbl, lbl.get_rect(center=(fx, fy)))
 
     def _open_dropdown(self):
         self._dropdown = DropdownMenu(
