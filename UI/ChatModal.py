@@ -243,7 +243,19 @@ class ChatModal:
 
             is_me   = (msg['from_id'] == my_id)
             content = msg.get('content', '')
-            sent_at = str(msg.get('sent_at', ''))[:16]
+            sent_at = str(msg.get('sent_at', ''))
+            # parse "Fri, 03 Apr 2026 10:02:16 GMT" → "10:02"
+            # hoặc "2026-04-03 10:02:16" → "10:02"
+            try:
+                if ',' in sent_at:
+                    # dạng RFC: "Fri, 03 Apr 2026 10:02:16 GMT"
+                    time_part = sent_at.split(' ')[4][:5]
+                elif 'T' in sent_at:
+                    time_part = sent_at.split('T')[1][:5]
+                else:
+                    time_part = sent_at[11:16]
+            except Exception:
+                time_part = ''
 
             # bubble
             max_w = ma.w - 80
@@ -271,7 +283,7 @@ class ChatModal:
                 surface.blit(lbl, (bub_x + 10, bub_y + 7 + j * 18))
 
             # thời gian
-            tl = self.f_time.render(sent_at[11:], True, C_TEXT_DIM)
+            tl = self.f_time.render(time_part, True, C_TEXT_DIM)
             if is_me:
                 surface.blit(tl, (bub_x - tl.get_width() - 4, bub_y + bub_h - tl.get_height()))
             else:
