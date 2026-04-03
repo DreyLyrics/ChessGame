@@ -81,6 +81,15 @@ def init_db():
                     UNIQUE(user_id, friend_id)
                 )
             ''')
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS messages (
+                    id       SERIAL PRIMARY KEY,
+                    from_id  INTEGER NOT NULL REFERENCES users(id),
+                    to_id    INTEGER NOT NULL REFERENCES users(id),
+                    content  TEXT    NOT NULL,
+                    sent_at  TIMESTAMP DEFAULT NOW()
+                )
+            ''')
         conn.commit()
 
 
@@ -332,3 +341,33 @@ def get_friendship_status(user_id: int, other_id: int) -> str:
             )
             row = cur.fetchone()
     return row[0] if row else 'none'
+
+
+# ── Messages ──────────────────────────────────────────────────────────────────
+
+def send_message(from_id: int, to_id: int, content: str) -> dict:
+    if not content.strip():
+        return {'ok': False, 'error': 'Tin nhan trong'}
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'INSERT INTO messages(from_id, to_id, content) VALUES(%s,%s,%s)',
+                (from_id, to_id, content.strip())
+            )
+        conn.commit()
+    return {'ok': True}
+
+
+def get_messages(user_id: int, friend_id: int, limit: int = 50) -> list:
+    """Lấy tin nhắn giữa 2 người, mới nhất trước."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'SELECT id, from_id, to_id, content, sent_at FROM messages '
+                'WHERE (from_id=%s AND to_id=%s) OR (from_id=%s AND to_id=%s) '
+                'ORDER BY sent_at DESC LIMIT %s',
+                (user_id, friend_id, friend_id, user_id, limit)
+            )
+            rows = cur.fetchall()
+            cols = [d.name for d in cur.description]
+            return list(reversed([dict(zip(cols, r)) for r in rows]))

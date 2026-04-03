@@ -444,6 +444,25 @@ def api_friend_status():
     return {'ok': True, 'status': db.get_friendship_status(user_id, other_id)}
 
 
+# ── Messages API ──────────────────────────────────────────────────────────────
+
+@app.route('/api/message/send', methods=['POST'])
+def api_message_send():
+    from flask import request as req
+    data = req.get_json() or {}
+    db = _get_db()
+    return db.send_message(data.get('from_id'), data.get('to_id'), data.get('content', ''))
+
+@app.route('/api/message/history', methods=['GET'])
+def api_message_history():
+    from flask import request as req
+    user_id   = req.args.get('user_id', 0, type=int)
+    friend_id = req.args.get('friend_id', 0, type=int)
+    limit     = req.args.get('limit', 50, type=int)
+    db = _get_db()
+    return {'ok': True, 'messages': db.get_messages(user_id, friend_id, limit)}
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':

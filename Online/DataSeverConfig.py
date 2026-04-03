@@ -111,3 +111,13 @@ def get_pending_requests(user_id: int) -> list:
 def get_friendship_status(user_id: int, other_id: int) -> str:
     res = _get('/friend/status', {'user_id': user_id, 'other_id': other_id})
     return res.get('status', 'none') if res.get('ok') else 'none'
+
+
+# ── Messages API ──────────────────────────────────────────────────────────────
+
+def send_message(from_id: int, to_id: int, content: str) -> dict:
+    return _post('/message/send', {'from_id': from_id, 'to_id': to_id, 'content': content})
+
+def get_messages(user_id: int, friend_id: int, limit: int = 50) -> list:
+    res = _get('/message/history', {'user_id': user_id, 'friend_id': friend_id, 'limit': limit})
+    return res.get('messages', []) if res.get('ok') else []

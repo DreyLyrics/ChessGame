@@ -138,7 +138,14 @@ class FriendModal:
         if self._tab == 'friends':
             for i, f in enumerate(self._friends):
                 ry = lr.y + i * row_h
-                btn_r = pygame.Rect(lr.right - 80, ry + 12, 72, 28)
+                btn_chat = pygame.Rect(lr.right - 162, ry + 12, 72, 28)
+                btn_r    = pygame.Rect(lr.right - 82,  ry + 12, 72, 28)
+                if btn_chat.collidepoint(pos):
+                    # mở ChatModal
+                    from ChatModal import ChatModal
+                    ChatModal(self.screen_w, self.screen_h, self.user, f).run(
+                        pygame.display.get_surface())
+                    return
                 if btn_r.collidepoint(pos):
                     res = db.remove_friend(uid, f['id'])
                     if res.get('ok'):
@@ -293,11 +300,16 @@ class FriendModal:
             surface.blit(ul, (row.x+12, ry+26))
 
             if self._tab == 'friends':
-                btn_r = pygame.Rect(row.right-80, ry+12, 72, 28)
-                bc = (100,60,60) if btn_r.collidepoint(mouse) else C_REMOVE
-                pygame.draw.rect(surface, bc, btn_r, border_radius=6)
-                bl = self.f_btn.render('Xoa ban', True, C_TEXT)
-                surface.blit(bl, bl.get_rect(center=btn_r.center))
+                btn_chat = pygame.Rect(row.right-162, ry+12, 72, 28)
+                btn_r    = pygame.Rect(row.right-82,  ry+12, 72, 28)
+                for btn, label, color in [
+                    (btn_chat, 'Chat', (50,100,200)),
+                    (btn_r,    'Xoa ban', C_REMOVE),
+                ]:
+                    bc = tuple(min(255,c+30) for c in color) if btn.collidepoint(mouse) else color
+                    pygame.draw.rect(surface, bc, btn, border_radius=6)
+                    bl = self.f_btn.render(label, True, C_TEXT)
+                    surface.blit(bl, bl.get_rect(center=btn.center))
 
             elif self._tab == 'requests':
                 btn_acc = pygame.Rect(row.right-160, ry+12, 70, 28)
