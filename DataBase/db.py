@@ -100,6 +100,21 @@ def init_db():
                     created_at TIMESTAMP DEFAULT NOW()
                 )
             ''')
+            # migration: đảm bảo cột đúng
+            cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='matches'")
+            match_cols = [r[0] for r in cur.fetchall()]
+            if match_cols and 'pin' not in match_cols:
+                cur.execute('DROP TABLE IF EXISTS matches CASCADE')
+                cur.execute('''
+                    CREATE TABLE matches (
+                        id         SERIAL PRIMARY KEY,
+                        pin        TEXT    NOT NULL UNIQUE,
+                        host       TEXT    NOT NULL,
+                        guest      TEXT    DEFAULT '',
+                        status     TEXT    NOT NULL DEFAULT 'waiting',
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                ''')
             # migration: đảm bảo cột đúng tên
             cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='messages'")
             msg_cols = [r[0] for r in cur.fetchall()]
