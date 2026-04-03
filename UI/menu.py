@@ -241,6 +241,24 @@ class MenuScreen:
                     self.avatar_btn.update_from_user(result)
                 continue
 
+            if avatar_result == 'friend':
+                _UI_DIR = os.path.dirname(os.path.abspath(__file__))
+                if _UI_DIR not in sys.path:
+                    sys.path.insert(0, _UI_DIR)
+                from FriendModal import FriendModal
+                _ONLINE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Online')
+                if _ONLINE_DIR not in sys.path:
+                    sys.path.insert(0, _ONLINE_DIR)
+                import DataSeverConfig as _db
+                full_user = _db.get_user(self.avatar_btn.username) or {}
+                user_data = {
+                    'id':           full_user.get('id', 0),
+                    'username':     full_user.get('username', self.avatar_btn.username),
+                    'display_name': full_user.get('display_name', '') or self.avatar_btn.username,
+                }
+                FriendModal(self.W, self.H, user_data).run(self.screen)
+                continue
+
             if avatar_result == 'settings':
                 _UI_DIR = os.path.dirname(os.path.abspath(__file__))
                 if _UI_DIR not in sys.path:
