@@ -42,16 +42,45 @@ def _role_color(role):
     return C_ROLE_USER
 
 
+VN_TZ = timezone(timedelta(hours=7))   # UTC+7
+
+
+def _to_vn(dt) -> datetime:
+    """Chuyển datetime (naive hoặc UTC) sang giờ Việt Nam (UTC+7)."""
+    if dt is None:
+        return None
+    if isinstance(dt, str):
+        dt = dt.strip()
+        if not dt:
+            return None
+        try:
+            dt = datetime.fromisoformat(dt)
+        except Exception:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(VN_TZ)
+
+
 def _fmt_date(val):
-    """Rút gọn timestamp thành dd/mm/yyyy."""
-    if not val:
-        return ''
-    s = str(val)[:10]
-    try:
-        dt = datetime.strptime(s, '%Y-%m-%d')
-        return dt.strftime('%d/%m/%Y')
-    except Exception:
-        return s
+    """Timestamp → dd/mm/yyyy (giờ VN)."""
+    dt = _to_vn(val)
+    if dt is None:
+        # fallback: chỉ lấy phần date từ string
+        s = str(val)[:10]
+        try:
+            return datetime.strptime(s, '%Y-%m-%d').strftime('%d/%m/%Y')
+        except Exception:
+            return str(val)[:10]
+    return dt.strftime('%d/%m/%Y')
+
+
+def _fmt_datetime_vn(val) -> str:
+    """Timestamp → dd/mm/yyyy HH:MM:SS (giờ VN)."""
+    dt = _to_vn(val)
+    if dt is None:
+        return str(val)
+    return dt.strftime('%d/%m/%Y %H:%M:%S')
 
 
 # ── Ban Dialog ────────────────────────────────────────────────────────────────
@@ -179,8 +208,8 @@ class BanDialog:
             delta = timedelta(days=days, hours=hours, seconds=secs)
             if delta.total_seconds() <= 0:
                 delta = timedelta(seconds=30)
-            until = datetime.now(timezone.utc) + delta
-            self.result = {'ban_until': until.isoformat()}
+            until_utc = datetime.now(timezone.utc) + delta
+            self.result = {'ban_until': until_utc.isoformat()}
 
     def _draw(self, surface):
         surface.blit(self._overlay, (0, 0))
@@ -231,14 +260,15 @@ class BanDialog:
                 vl = self.f_lbl.render(val, True, C_TEXT)
                 surface.blit(vl, vl.get_rect(center=inp.center))
 
-            # preview
+            # preview giờ VN
             try:
                 d = int(self.days_str or 0)
                 h = int(self.hours_str or 0)
                 s = int(self.secs_str or 0)
-                until = datetime.now(timezone.utc) + timedelta(days=d, hours=h, seconds=s)
-                prev  = self.f_small.render(
-                    f'Het han: {until.strftime("%d/%m/%Y %H:%M:%S")} UTC', True, C_TEXT_DIM)
+                until_utc = datetime.now(timezone.utc) + timedelta(days=d, hours=h, seconds=s)
+                until_vn  = until_utc.astimezone(VN_TZ)
+                prev = self.f_small.render(
+                    f'Het han: {until_vn.strftime("%d/%m/%Y %H:%M:%S")} (VN)', True, C_TEXT_DIM)
                 surface.blit(prev, (ox + 20, oy + 170))
             except Exception:
                 pass
@@ -490,11 +520,10 @@ class AdminModal:
                 u['ban_until'] = ban_until
                 if ban_until:
                     try:
-                        dt    = datetime.fromisoformat(ban_until)
-                        label = dt.strftime('%d/%m/%Y %H:%M:%S')
+                        label = _fmt_datetime_vn(ban_until)
                     except Exception:
                         label = str(ban_until)
-                    self._show_msg(f'Da ban {uname} den {label}', True)
+                    self._show_msg(f'Da ban {uname} den {label} (VN)', True)
                 else:
                     self._show_msg(f'Da ban {uname} vinh vien', True)
             else:
