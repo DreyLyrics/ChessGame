@@ -106,19 +106,17 @@ class _Toast:
         bar.fill((100, 160, 255, alpha))
         bg.blit(bar, (8, 8))
 
-        # icon chuông (vẽ bằng pygame, không dùng emoji)
-        bell_cx, bell_cy = 26, self.H // 2
-        # thân chuông
-        pygame.draw.arc(bg, (100, 160, 255, alpha),
-                        pygame.Rect(bell_cx - 9, bell_cy - 10, 18, 16),
-                        0, 3.14159, 3)
-        pygame.draw.rect(bg, (100, 160, 255, alpha),
-                         pygame.Rect(bell_cx - 9, bell_cy - 2, 18, 6))
-        # tay cầm
-        pygame.draw.circle(bg, (100, 160, 255, alpha), (bell_cx, bell_cy + 8), 3)
-        # đỉnh
-        pygame.draw.line(bg, (100, 160, 255, alpha),
-                         (bell_cx - 2, bell_cy - 10), (bell_cx + 2, bell_cy - 10), 2)
+        # icon chuông dùng emoji với font hỗ trợ
+        for fname in ('Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'segoeui'):
+            try:
+                f_icon = pygame.font.SysFont(fname, 20)
+                icon   = f_icon.render('🔔', True, (100, 160, 255))
+                if icon.get_width() > 4:   # font hỗ trợ emoji
+                    icon.set_alpha(alpha)
+                    bg.blit(icon, (14, self.H // 2 - icon.get_height() // 2))
+                    break
+            except Exception:
+                continue
 
         # tên người gửi
         name_lbl = self._font_name.render(self.sender, True, (220, 220, 255))

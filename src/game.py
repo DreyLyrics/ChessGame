@@ -355,6 +355,7 @@ class Game:
             if self.in_check:
                 self.game_result = RESULT_CHECKMATE
                 self.winner      = 'black' if color == 'white' else 'white'
+                self.play_result_sound(self.winner)
             else:
                 self.game_result = RESULT_STALEMATE
                 self.winner      = None
@@ -378,6 +379,20 @@ class Game:
             self.config.capture_sound.play()
         else:
             self.config.move_sound.play()
+
+    def play_result_sound(self, winner_color: str, my_color: str = None):
+        """Phát sound thắng/thua. my_color=None → dùng cho local (không phân biệt)."""
+        try:
+            if my_color:
+                if winner_color == my_color:
+                    self.config.winner_sound.play()
+                else:
+                    self.config.lose_sound.play()
+            else:
+                # local/bot: phát winner cho bên thắng (không phân biệt góc nhìn)
+                self.config.winner_sound.play()
+        except Exception:
+            pass
 
     def reset(self):
         self.__init__()

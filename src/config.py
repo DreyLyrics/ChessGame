@@ -17,6 +17,10 @@ class Config:
             os.path.join('assets/sounds/move.wav'))
         self.capture_sound = Sound(
             os.path.join('assets/sounds/capture.wav'))
+        self.winner_sound = Sound(
+            os.path.join('assets/sounds/winner.mp3'))
+        self.lose_sound = Sound(
+            os.path.join('assets/sounds/Lose.mp3'))
 
     def change_theme(self):
         self.idx += 1
@@ -31,6 +35,8 @@ class Config:
         v = max(0.0, min(1.0, vol_0_100 / 100.0))
         self.move_sound.sound.set_volume(v)
         self.capture_sound.sound.set_volume(v)
+        self.winner_sound.sound.set_volume(v)
+        self.lose_sound.sound.set_volume(v)
 
     def _add_themes(self):
         green = Theme((234, 235, 200), (119, 154, 88), (244, 247, 116), (172, 195, 51), '#C86464', '#C84646')
