@@ -39,25 +39,17 @@ class CreateMatch:
         self._overlay=pygame.Surface((screen_w,screen_h),pygame.SRCALPHA)
         self._overlay.fill(C_OVERLAY)
         if client:
-            threading.Thread(target=self._wait_game_started, daemon=True).start()
+            pass   # game_started được xử lý trong run() poll loop
         # nếu là guest → load host_display từ DB ngay
         if not self.is_host:
             threading.Thread(target=self._load_host_display, daemon=True).start()
 
     def _wait_game_started(self):
-        """Chờ game_started event — dùng poll để không miss event."""
-        import time as _time
-        deadline = _time.time() + 600
-        while _time.time() < deadline and not self._game_ready.is_set():
-            for ev, data in self._client.poll():
-                if ev == 'game_started':
-                    self._game_color = data.get('color', 'white')
-                    self._game_ready.set()
-                    return
-                else:
-                    # đưa event khác trở lại queue
-                    self._client._q.put((ev, data))
-            _time.sleep(0.1)
+        """Chờ game_started event dùng wait_for — không miss event."""
+        data = self._client.wait_for('game_started', timeout=600)
+        if data:
+            self._game_color = data.get('color', 'white')
+            self._game_ready.set()
 
     def _load_host_display(self):
         """Guest load host_display từ DB ngay khi vào phòng."""
@@ -124,10 +116,13 @@ class CreateMatch:
                     self._last_db_poll = now
                     threading.Thread(target=self._poll_db_guest, daemon=True).start()
 
-            # poll socket events
+            # poll socket events — xử lý tất cả kể cả game_started
             if self._client:
                 for ev,data in self._client.poll():
-                    if ev=='room_updated':
+                    if ev=='game_started':
+                        self._game_color = data.get('color', 'white')
+                        self._game_ready.set()
+                    elif ev=='room_updated':
                         self._guest=data.get('guest','')
                         if data.get('host_display'):
                             self.host_display = data['host_display']
@@ -140,6 +135,10 @@ class CreateMatch:
                     elif ev=='error':
                         self._msg=data.get('msg','Loi')
                         self._msg_ok=False; self._msg_timer=pygame.time.get_ticks()+2500
+
+            # check lại ngay sau poll — không chờ frame tiếp
+            if self._game_ready.is_set():
+                self._result='start'; break
 
             for event in pygame.event.get():
                 if event.type==pygame.QUIT: self._leave(); break
