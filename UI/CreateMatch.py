@@ -26,7 +26,7 @@ class CreateMatch:
         self.screen_w=screen_w; self.screen_h=screen_h
         self.pin=pin; self.host=host; self.username=username
         self.display_name=display_name or username
-        self.host_display=host   # sẽ được cập nhật từ room_joined nếu có
+        self.host_display=host   # sẽ được cập nhật từ DB hoặc room_joined
         self.is_host=(username==host)
         self._client=client
         self._result=...; self._open_t=0
@@ -34,19 +34,35 @@ class CreateMatch:
         # nếu là guest → slot guest hiện tên mình ngay
         self._guest = '' if self.is_host else (display_name or username)
         self._game_color=None
-        self._game_ready=threading.Event()   # set khi game_started nhận được
+        self._game_ready=threading.Event()
         self._init_fonts(); self._build()
         self._overlay=pygame.Surface((screen_w,screen_h),pygame.SRCALPHA)
         self._overlay.fill(C_OVERLAY)
-        # thread chờ game_started — không bao giờ bỏ sót
         if client:
             threading.Thread(target=self._wait_game_started, daemon=True).start()
+        # nếu là guest → load host_display từ DB ngay
+        if not self.is_host:
+            threading.Thread(target=self._load_host_display, daemon=True).start()
 
     def _wait_game_started(self):
         data=self._client.wait_for('game_started', timeout=600)
         if data:
             self._game_color=data.get('color','white')
             self._game_ready.set()
+
+    def _load_host_display(self):
+        """Guest load host_display từ DB ngay khi vào phòng."""
+        try:
+            import DataSeverConfig as db
+            rooms = db.get_open_rooms()
+            for r in rooms:
+                if r['pin'] == self.pin:
+                    hd = r.get('host_display') or r.get('host', '')
+                    if hd:
+                        self.host_display = hd
+                    break
+        except Exception:
+            pass
 
     def _poll_db_guest(self):
         """Poll DB để lấy tên guest mới nhất."""
