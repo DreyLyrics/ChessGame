@@ -198,6 +198,29 @@ def register(username, email, password):
         return {'ok': False, 'error': str(e)}
 
 
+def _check_and_expire_ban(conn, cur, user_id: int, ban_until) -> str:
+    """Nếu ban_until đã qua → tự unban, trả về role mới. Ngược lại giữ nguyên."""
+    if ban_until is None:
+        return None   # không có thay đổi
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    if isinstance(ban_until, str):
+        try:
+            ban_until = datetime.fromisoformat(ban_until)
+        except Exception:
+            return None
+    if ban_until.tzinfo is None:
+        ban_until = ban_until.replace(tzinfo=timezone.utc)
+    if now >= ban_until:
+        cur.execute(
+            "UPDATE users SET role='user', ban_until=NULL WHERE id=%s",
+            (user_id,)
+        )
+        conn.commit()
+        return 'user'
+    return None
+
+
 def login(username, password):
     with _connect() as conn:
         with conn.cursor() as cur:
@@ -208,7 +231,16 @@ def login(username, password):
             row = cur.fetchone()
             if row is None:
                 return {'ok': False, 'error': 'Sai ten dang nhap hoac mat khau'}
-            return {'ok': True, 'user': _row(cur, row)}
+            user = _row(cur, row)
+            # tự động gỡ ban nếu hết hạn
+            new_role = _check_and_expire_ban(conn, cur, user['id'], user.get('ban_until'))
+            if new_role:
+                user['role']      = new_role
+                user['ban_until'] = None
+            # chặn login nếu vẫn còn bị ban
+            if user.get('role') == 'banned':
+                return {'ok': False, 'error': 'Tai khoan bi cam. Lien he admin.'}
+            return {'ok': True, 'user': user}
 
 
 def get_user(username):
@@ -535,6 +567,25 @@ def unban_user(username: str) -> dict:
         return {'ok': True}
     except Exception as e:
         return {'ok': False, 'error': str(e)}
+
+
+def expire_bans() -> int:
+    """Tự động gỡ ban tất cả user có ban_until đã qua. Trả về số user được unban."""
+    from datetime import datetime, timezone
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET role='user', ban_until=NULL "
+                    "WHERE role='banned' AND ban_until IS NOT NULL AND ban_until <= NOW()"
+                )
+                count = cur.rowcount
+            conn.commit()
+        return count
+    except Exception as e:
+        import logging
+        logging.getLogger('db').warning(f'expire_bans error: {e}')
+        return 0
 
 
 def set_user_ban(username: str, ban_until=None) -> dict:

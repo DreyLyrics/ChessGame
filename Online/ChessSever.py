@@ -571,6 +571,22 @@ def api_admin_deleted_messages():
     return {'ok': True, 'messages': db.get_deleted_messages(limit)}
 
 
+# ── Background: tự động gỡ ban hết hạn ───────────────────────────────────────
+
+def _expire_bans_loop():
+    """Chạy mỗi 60 giây, unban tất cả user có ban_until đã qua."""
+    import time as _time
+    while True:
+        try:
+            db = _get_db()
+            db.expire_bans()
+        except Exception as e:
+            log.warning(f'expire_bans error: {e}')
+        _time.sleep(60)
+
+threading.Thread(target=_expire_bans_loop, daemon=True).start()
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
