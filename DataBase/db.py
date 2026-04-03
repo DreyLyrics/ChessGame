@@ -90,6 +90,20 @@ def init_db():
                     sent_at  TIMESTAMP DEFAULT NOW()
                 )
             ''')
+            # migration: đảm bảo cột đúng tên
+            cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='messages'")
+            msg_cols = [r[0] for r in cur.fetchall()]
+            if msg_cols and 'from_id' not in msg_cols:
+                cur.execute('DROP TABLE IF EXISTS messages CASCADE')
+                cur.execute('''
+                    CREATE TABLE messages (
+                        id       SERIAL PRIMARY KEY,
+                        from_id  INTEGER NOT NULL REFERENCES users(id),
+                        to_id    INTEGER NOT NULL REFERENCES users(id),
+                        content  TEXT    NOT NULL,
+                        sent_at  TIMESTAMP DEFAULT NOW()
+                    )
+                ''')
         conn.commit()
 
 
