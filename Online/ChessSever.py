@@ -391,6 +391,59 @@ def api_match_history():
     return {'ok': True, 'history': db.get_match_history(user_id, limit)}
 
 
+# ── Friendship API ────────────────────────────────────────────────────────────
+
+@app.route('/api/friend/send', methods=['POST'])
+def api_friend_send():
+    from flask import request as req
+    data = req.get_json() or {}
+    db = _get_db()
+    return db.send_friend_request(data.get('user_id'), data.get('to_username', ''))
+
+@app.route('/api/friend/accept', methods=['POST'])
+def api_friend_accept():
+    from flask import request as req
+    data = req.get_json() or {}
+    db = _get_db()
+    return db.accept_friend_request(data.get('user_id'), data.get('from_user_id'))
+
+@app.route('/api/friend/reject', methods=['POST'])
+def api_friend_reject():
+    from flask import request as req
+    data = req.get_json() or {}
+    db = _get_db()
+    return db.reject_friend_request(data.get('user_id'), data.get('from_user_id'))
+
+@app.route('/api/friend/remove', methods=['POST'])
+def api_friend_remove():
+    from flask import request as req
+    data = req.get_json() or {}
+    db = _get_db()
+    return db.remove_friend(data.get('user_id'), data.get('friend_id'))
+
+@app.route('/api/friend/list', methods=['GET'])
+def api_friend_list():
+    from flask import request as req
+    user_id = req.args.get('user_id', 0, type=int)
+    db = _get_db()
+    return {'ok': True, 'friends': db.get_friends(user_id)}
+
+@app.route('/api/friend/pending', methods=['GET'])
+def api_friend_pending():
+    from flask import request as req
+    user_id = req.args.get('user_id', 0, type=int)
+    db = _get_db()
+    return {'ok': True, 'requests': db.get_pending_requests(user_id)}
+
+@app.route('/api/friend/status', methods=['GET'])
+def api_friend_status():
+    from flask import request as req
+    user_id  = req.args.get('user_id', 0, type=int)
+    other_id = req.args.get('other_id', 0, type=int)
+    db = _get_db()
+    return {'ok': True, 'status': db.get_friendship_status(user_id, other_id)}
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':

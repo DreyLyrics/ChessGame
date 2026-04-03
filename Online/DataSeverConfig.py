@@ -84,3 +84,30 @@ def add_match(user_id, opponent, result, color, moves=0):
 def get_match_history(user_id, limit=20):
     res = _get('/match_history', {'user_id': user_id, 'limit': limit})
     return res.get('history', []) if res.get('ok') else []
+
+
+# ── Friendship API ────────────────────────────────────────────────────────────
+
+def send_friend_request(user_id: int, to_username: str) -> dict:
+    return _post('/friend/send', {'user_id': user_id, 'to_username': to_username})
+
+def accept_friend_request(user_id: int, from_user_id: int) -> dict:
+    return _post('/friend/accept', {'user_id': user_id, 'from_user_id': from_user_id})
+
+def reject_friend_request(user_id: int, from_user_id: int) -> dict:
+    return _post('/friend/reject', {'user_id': user_id, 'from_user_id': from_user_id})
+
+def remove_friend(user_id: int, friend_id: int) -> dict:
+    return _post('/friend/remove', {'user_id': user_id, 'friend_id': friend_id})
+
+def get_friends(user_id: int) -> list:
+    res = _get('/friend/list', {'user_id': user_id})
+    return res.get('friends', []) if res.get('ok') else []
+
+def get_pending_requests(user_id: int) -> list:
+    res = _get('/friend/pending', {'user_id': user_id})
+    return res.get('requests', []) if res.get('ok') else []
+
+def get_friendship_status(user_id: int, other_id: int) -> str:
+    res = _get('/friend/status', {'user_id': user_id, 'other_id': other_id})
+    return res.get('status', 'none') if res.get('ok') else 'none'

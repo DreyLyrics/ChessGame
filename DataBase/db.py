@@ -71,6 +71,16 @@ def init_db():
                     played_at TIMESTAMP DEFAULT NOW()
                 )
             ''')
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS friendships (
+                    id         SERIAL PRIMARY KEY,
+                    user_id    INTEGER NOT NULL REFERENCES users(id),
+                    friend_id  INTEGER NOT NULL REFERENCES users(id),
+                    status     TEXT    NOT NULL DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE(user_id, friend_id)
+                )
+            ''')
         conn.commit()
 
 
@@ -210,3 +220,115 @@ try:
 except Exception as e:
     import logging
     logging.getLogger('db').warning(f'init_db skipped: {e}')
+
+
+# ── Friendships ───────────────────────────────────────────────────────────────
+
+def send_friend_request(from_user_id: int, to_username: str) -> dict:
+    """Gửi lời mời kết bạn. status='pending'."""
+    to = get_user(to_username)
+    if not to:
+        return {'ok': False, 'error': 'Khong tim thay nguoi dung'}
+    if to['id'] == from_user_id:
+        return {'ok': False, 'error': 'Khong the ket ban voi chinh minh'}
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    'INSERT INTO friendships(user_id, friend_id, status) VALUES(%s,%s,%s) '
+                    'ON CONFLICT(user_id, friend_id) DO NOTHING',
+                    (from_user_id, to['id'], 'pending')
+                )
+            conn.commit()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+def accept_friend_request(user_id: int, from_user_id: int) -> dict:
+    """Chấp nhận lời mời — đổi status thành 'accepted' và tạo chiều ngược lại."""
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE friendships SET status='accepted' "
+                    'WHERE user_id=%s AND friend_id=%s',
+                    (from_user_id, user_id)
+                )
+                # tạo chiều ngược lại
+                cur.execute(
+                    'INSERT INTO friendships(user_id, friend_id, status) VALUES(%s,%s,%s) '
+                    'ON CONFLICT(user_id, friend_id) DO UPDATE SET status=%s',
+                    (user_id, from_user_id, 'accepted', 'accepted')
+                )
+            conn.commit()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+def reject_friend_request(user_id: int, from_user_id: int) -> dict:
+    """Từ chối / xóa lời mời."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'DELETE FROM friendships WHERE user_id=%s AND friend_id=%s',
+                (from_user_id, user_id)
+            )
+        conn.commit()
+    return {'ok': True}
+
+
+def remove_friend(user_id: int, friend_id: int) -> dict:
+    """Xóa bạn bè (cả 2 chiều)."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'DELETE FROM friendships WHERE (user_id=%s AND friend_id=%s) '
+                'OR (user_id=%s AND friend_id=%s)',
+                (user_id, friend_id, friend_id, user_id)
+            )
+        conn.commit()
+    return {'ok': True}
+
+
+def get_friends(user_id: int) -> list:
+    """Danh sách bạn bè đã accepted."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'SELECT u.id, u.username, u.display_name, u.avatar_path '
+                'FROM friendships f JOIN users u ON u.id = f.friend_id '
+                'WHERE f.user_id=%s AND f.status=%s',
+                (user_id, 'accepted')
+            )
+            rows = cur.fetchall()
+            cols = [d.name for d in cur.description]
+            return [dict(zip(cols, r)) for r in rows]
+
+
+def get_pending_requests(user_id: int) -> list:
+    """Danh sách lời mời đang chờ (người khác gửi cho mình)."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'SELECT u.id, u.username, u.display_name, f.created_at '
+                'FROM friendships f JOIN users u ON u.id = f.user_id '
+                'WHERE f.friend_id=%s AND f.status=%s',
+                (user_id, 'pending')
+            )
+            rows = cur.fetchall()
+            cols = [d.name for d in cur.description]
+            return [dict(zip(cols, r)) for r in rows]
+
+
+def get_friendship_status(user_id: int, other_id: int) -> str:
+    """Trả về 'accepted' | 'pending' | 'none'."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'SELECT status FROM friendships WHERE user_id=%s AND friend_id=%s',
+                (user_id, other_id)
+            )
+            row = cur.fetchone()
+    return row[0] if row else 'none'
