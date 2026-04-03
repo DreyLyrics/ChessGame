@@ -148,3 +148,6 @@ def admin_get_messages(limit: int = 100) -> list:
 
 def admin_delete_message(msg_id: int) -> dict:
     return _post('/admin/delete_message', {'msg_id': msg_id})
+
+def admin_seed() -> dict:
+    return _post('/admin/seed', {})

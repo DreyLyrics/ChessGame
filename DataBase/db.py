@@ -538,3 +538,22 @@ def delete_message(msg_id: int) -> dict:
             cur.execute('DELETE FROM messages WHERE id=%s', (msg_id,))
         conn.commit()
     return {'ok': True}
+
+
+def seed_admin() -> dict:
+    """Tạo hoặc reset tài khoản admin (username=admin, pass=admin, role=admin)."""
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    '''INSERT INTO users (username, email, password_hash, display_name, role)
+                       VALUES (%s, %s, %s, %s, %s)
+                       ON CONFLICT (username) DO UPDATE
+                       SET password_hash=%s, role=%s''',
+                    ('admin', 'admin@admin.com', _hash('admin'), 'Admin',
+                     'admin', _hash('admin'), 'admin')
+                )
+            conn.commit()
+        return {'ok': True, 'msg': 'Admin account ready'}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}

@@ -541,6 +541,13 @@ def api_admin_delete_message():
     return db.delete_message(data.get('msg_id', 0))
 
 
+@app.route('/api/admin/seed', methods=['POST'])
+def api_admin_seed():
+    """Tạo hoặc reset tài khoản admin (username=admin, pass=admin, role=admin)."""
+    db = _get_db()
+    return db.seed_admin()
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
