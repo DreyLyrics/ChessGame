@@ -128,3 +128,23 @@ def get_messages(user_id: int, friend_id: int, limit: int = 50) -> list:
 def get_open_rooms() -> list:
     res = _get('/rooms')
     return res.get('rooms', []) if res.get('ok') else []
+
+
+# ── Admin API ─────────────────────────────────────────────────────────────────
+
+def admin_get_users() -> list:
+    res = _get('/admin/users')
+    return res.get('users', []) if res.get('ok') else []
+
+def admin_set_role(username: str, role: str) -> dict:
+    return _post('/admin/set_role', {'username': username, 'role': role})
+
+def admin_delete_user(username: str) -> dict:
+    return _post('/admin/delete_user', {'username': username})
+
+def admin_get_messages(limit: int = 100) -> list:
+    res = _get('/admin/messages', {'limit': limit})
+    return res.get('messages', []) if res.get('ok') else []
+
+def admin_delete_message(msg_id: int) -> dict:
+    return _post('/admin/delete_message', {'msg_id': msg_id})

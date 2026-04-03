@@ -505,6 +505,42 @@ def api_message_history():
     return {'ok': True, 'messages': db.get_messages(user_id, friend_id, limit)}
 
 
+# ── Admin API ─────────────────────────────────────────────────────────────────
+
+@app.route('/api/admin/users', methods=['GET'])
+def api_admin_users():
+    db = _get_db()
+    return {'ok': True, 'users': db.get_all_users()}
+
+@app.route('/api/admin/set_role', methods=['POST'])
+def api_admin_set_role():
+    from flask import request as req
+    data = req.get_json() or {}
+    db = _get_db()
+    return db.set_user_role(data.get('username', ''), data.get('role', 'user'))
+
+@app.route('/api/admin/delete_user', methods=['POST'])
+def api_admin_delete_user():
+    from flask import request as req
+    data = req.get_json() or {}
+    db = _get_db()
+    return db.delete_user(data.get('username', ''))
+
+@app.route('/api/admin/messages', methods=['GET'])
+def api_admin_messages():
+    from flask import request as req
+    limit = req.args.get('limit', 100, type=int)
+    db = _get_db()
+    return {'ok': True, 'messages': db.get_all_messages(limit)}
+
+@app.route('/api/admin/delete_message', methods=['POST'])
+def api_admin_delete_message():
+    from flask import request as req
+    data = req.get_json() or {}
+    db = _get_db()
+    return db.delete_message(data.get('msg_id', 0))
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':

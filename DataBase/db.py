@@ -57,9 +57,15 @@ def init_db():
                     wins          INTEGER DEFAULT 0,
                     losses        INTEGER DEFAULT 0,
                     draws         INTEGER DEFAULT 0,
+                    role          TEXT    DEFAULT 'user',
                     created_at    TIMESTAMP DEFAULT NOW()
                 )
             ''')
+            # migration: thêm cột role nếu chưa có
+            cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='users'")
+            user_cols = [r[0] for r in cur.fetchall()]
+            if user_cols and 'role' not in user_cols:
+                cur.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS match_history (
                     id        SERIAL PRIMARY KEY,
@@ -469,3 +475,66 @@ def get_open_rooms() -> list:
                 d['host'] = d.get('host_display') or d.get('host', '')
                 result.append(d)
             return result
+
+
+# ── Admin ─────────────────────────────────────────────────────────────────────
+
+def get_all_users() -> list:
+    """Lấy tất cả user (admin only)."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'SELECT id, username, email, display_name, wins, losses, draws, role, created_at '
+                'FROM users ORDER BY created_at DESC'
+            )
+            rows = cur.fetchall()
+            cols = [d.name for d in cur.description]
+            return [dict(zip(cols, r)) for r in rows]
+
+
+def set_user_role(username: str, role: str) -> dict:
+    """Đổi role user (admin only). role: 'user' | 'admin' | 'banned'"""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute('UPDATE users SET role=%s WHERE username=%s', (role, username))
+        conn.commit()
+    return {'ok': True}
+
+
+def delete_user(username: str) -> dict:
+    """Xóa user (admin only)."""
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute('DELETE FROM users WHERE username=%s', (username,))
+            conn.commit()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+def get_all_messages(limit: int = 100) -> list:
+    """Lấy tất cả tin nhắn gần nhất (admin only)."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'SELECT m.id, u1.username as from_user, u2.username as to_user, '
+                'm.content, m.sent_at '
+                'FROM messages m '
+                'JOIN users u1 ON u1.id = m.from_id '
+                'JOIN users u2 ON u2.id = m.to_id '
+                'ORDER BY m.sent_at DESC LIMIT %s',
+                (limit,)
+            )
+            rows = cur.fetchall()
+            cols = [d.name for d in cur.description]
+            return [dict(zip(cols, r)) for r in rows]
+
+
+def delete_message(msg_id: int) -> dict:
+    """Xóa tin nhắn (admin only)."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute('DELETE FROM messages WHERE id=%s', (msg_id,))
+        conn.commit()
+    return {'ok': True}

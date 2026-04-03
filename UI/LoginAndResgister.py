@@ -224,7 +224,7 @@ class DropdownMenu:
     PADDING = 10
 
     def __init__(self, anchor_x, anchor_y, logged_in=False, username='', email='',
-                 display_name='', avatar_surf=None):
+                 display_name='', avatar_surf=None, is_admin=False):
         self.x            = anchor_x - self.ITEM_W
         self.y            = anchor_y
         self.logged_in    = logged_in
@@ -232,6 +232,7 @@ class DropdownMenu:
         self.email        = email
         self.display_name = display_name or username
         self.avatar_surf  = avatar_surf   # pygame.Surface tròn hoặc None
+        self.is_admin     = is_admin
         self._open_t   = pygame.time.get_ticks()
         self._hovered  = -1
 
@@ -240,14 +241,17 @@ class DropdownMenu:
         self._font_dim  = pygame.font.SysFont('segoeui', 12)
 
         if logged_in:
-            # Thong tin + Tuy chinh + Dang xuat
-            self._items  = ['Thong tin', 'Tuy chinh', 'Dang xuat']
+            self._items  = ['Thong tin', 'Tuy chinh']
             self._colors = [
-                ((100, 200, 255), (130, 220, 255)),   # Thong tin — xanh nhạt
-                (C_ACCENT, C_ACCENT_HOV),              # Tuy chinh — xanh dương
-                ((200, 80, 80), (230, 100, 100)),      # Dang xuat — đỏ
+                ((100, 200, 255), (130, 220, 255)),
+                (C_ACCENT, C_ACCENT_HOV),
             ]
-            info_h = 70   # chiều cao phần thông tin user
+            if is_admin:
+                self._items.append('Quan Ly Tai Khoan')
+                self._colors.append(((255, 200, 50), (255, 220, 100)))
+            self._items.append('Dang xuat')
+            self._colors.append(((200, 80, 80), (230, 100, 100)))
+            info_h = 70
         else:
             self._items  = ['Dang nhap']
             self._colors = [(C_ACCENT, C_ACCENT_HOV)]
@@ -693,6 +697,7 @@ class AvatarButton:
         self.email       = ''
         self.display_name = ''
         self.avatar_path  = ''
+        self.is_admin     = False
         self._avatar_surf = None   # ảnh tròn đã scale
         self._state      = 'idle'
         self._dropdown   = None
@@ -775,6 +780,10 @@ class AvatarButton:
                 self._state    = 'idle'
                 self._dropdown = None
                 return 'settings'
+            elif chosen == 'Quan Ly Tai Khoan':
+                self._state    = 'idle'
+                self._dropdown = None
+                return 'admin'
             return 'modal_active'
 
         if self._state == 'modal':
@@ -809,6 +818,7 @@ class AvatarButton:
                 if ap:
                     self.avatar_path = ap
                     self._load_avatar(ap)
+                self.is_admin  = (full.get('role', 'user') == 'admin')
                 self._state    = 'idle'
                 self._modal    = None
                 return result
@@ -865,6 +875,7 @@ class AvatarButton:
             email=self.email,
             display_name=self.display_name,
             avatar_surf=self._avatar_surf,
+            is_admin=getattr(self, 'is_admin', False),
         )
         self._state = 'dropdown'
 
