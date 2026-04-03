@@ -555,6 +555,21 @@ def api_admin_ban():
     db = _get_db()
     return db.set_user_ban(data.get('username', ''), data.get('ban_until', None))
 
+@app.route('/api/admin/unban', methods=['POST'])
+def api_admin_unban():
+    """Gỡ ban: role='user', ban_until=NULL."""
+    from flask import request as req
+    data = req.get_json() or {}
+    db = _get_db()
+    return db.unban_user(data.get('username', ''))
+
+@app.route('/api/admin/deleted_messages', methods=['GET'])
+def api_admin_deleted_messages():
+    from flask import request as req
+    limit = req.args.get('limit', 100, type=int)
+    db = _get_db()
+    return {'ok': True, 'messages': db.get_deleted_messages(limit)}
+
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 

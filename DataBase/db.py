@@ -138,6 +138,18 @@ def init_db():
                         sent_at  TIMESTAMP DEFAULT NOW()
                     )
                 ''')
+            # bảng lịch sử tin nhắn đã xóa
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS deleted_messages (
+                    id           SERIAL PRIMARY KEY,
+                    from_user    TEXT NOT NULL,
+                    to_user      TEXT NOT NULL,
+                    content      TEXT NOT NULL,
+                    sent_at      TIMESTAMP,
+                    deleted_at   TIMESTAMP DEFAULT NOW(),
+                    deleted_by   TEXT NOT NULL DEFAULT 'admin'
+                )
+            ''')
         conn.commit()
 
 
@@ -510,6 +522,21 @@ def set_user_role(username: str, role: str) -> dict:
     return {'ok': True}
 
 
+def unban_user(username: str) -> dict:
+    """Gỡ ban: đặt role='user' và ban_until=NULL."""
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET role='user', ban_until=NULL WHERE username=%s",
+                    (username,)
+                )
+            conn.commit()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
 def set_user_ban(username: str, ban_until=None) -> dict:
     """Ban user: ban_until=None → vĩnh viễn, ban_until=datetime → có thời hạn."""
     from datetime import datetime, timezone
@@ -567,12 +594,44 @@ def get_all_messages(limit: int = 100) -> list:
 
 
 def delete_message(msg_id: int) -> dict:
-    """Xóa tin nhắn (admin only)."""
+    """Xóa tin nhắn (admin only) — lưu vào deleted_messages trước."""
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                # lấy thông tin tin nhắn trước khi xóa
+                cur.execute(
+                    'SELECT u1.username, u2.username, m.content, m.sent_at '
+                    'FROM messages m '
+                    'JOIN users u1 ON u1.id = m.from_id '
+                    'JOIN users u2 ON u2.id = m.to_id '
+                    'WHERE m.id=%s', (msg_id,)
+                )
+                row = cur.fetchone()
+                if row:
+                    cur.execute(
+                        'INSERT INTO deleted_messages(from_user, to_user, content, sent_at) '
+                        'VALUES(%s,%s,%s,%s)',
+                        (row[0], row[1], row[2], row[3])
+                    )
+                cur.execute('DELETE FROM messages WHERE id=%s', (msg_id,))
+            conn.commit()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+def get_deleted_messages(limit: int = 100) -> list:
+    """Lấy lịch sử tin nhắn đã xóa (admin only)."""
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute('DELETE FROM messages WHERE id=%s', (msg_id,))
-        conn.commit()
-    return {'ok': True}
+            cur.execute(
+                'SELECT id, from_user, to_user, content, sent_at, deleted_at '
+                'FROM deleted_messages ORDER BY deleted_at DESC LIMIT %s',
+                (limit,)
+            )
+            rows = cur.fetchall()
+            cols = [d.name for d in cur.description]
+            return [dict(zip(cols, r)) for r in rows]
 
 
 def seed_admin() -> dict:

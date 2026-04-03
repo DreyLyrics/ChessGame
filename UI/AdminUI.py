@@ -300,11 +300,13 @@ class AdminModal:
         self.admin_username = admin_username
         self._result        = ...
         self._open_t        = 0
-        self._tab           = 'users'
+        self._tab           = 'users'   # 'users' | 'messages' | 'deleted'
 
         self._users         = []
-        self._users_all     = []   # bản gốc để filter
+        self._users_all     = []
         self._messages      = []
+        self._messages_all  = []
+        self._deleted_msgs  = []
         self._loading       = False
         self._msg           = ''
         self._msg_ok        = False
@@ -312,10 +314,11 @@ class AdminModal:
 
         self._scroll_u      = 0
         self._scroll_m      = 0
+        self._scroll_d      = 0
 
-        # search
-        self._search_text   = ''
-        self._search_focus  = False
+        self._search_user   = ''
+        self._search_msg    = ''
+        self._search_focus  = None   # 'user' | 'msg'
 
         self._init_fonts()
         self._build()
@@ -346,14 +349,15 @@ class AdminModal:
         self.btn_reload = pygame.Rect(mx + self.W - 68, my + 10, 26, 26)
 
         pad   = 20
-        tab_w = (self.W - pad * 2 - 8) // 2
-        self.tab_users_rect = pygame.Rect(mx + pad,             my + 46, tab_w, 32)
-        self.tab_msgs_rect  = pygame.Rect(mx + pad + tab_w + 8, my + 46, tab_w, 32)
+        tab_w = (self.W - pad * 2 - 16) // 3
+        self.tab_users_rect   = pygame.Rect(mx + pad,                   my + 46, tab_w, 32)
+        self.tab_msgs_rect    = pygame.Rect(mx + pad + tab_w + 8,       my + 46, tab_w, 32)
+        self.tab_deleted_rect = pygame.Rect(mx + pad + (tab_w + 8) * 2, my + 46, tab_w, 32)
 
-        # search bar (chỉ hiện ở tab users)
+        # search bar
         self.search_rect = pygame.Rect(mx + pad, my + 86, self.W - pad * 2, 28)
 
-        # list area (bắt đầu sau search bar)
+        # list area
         self.list_rect = pygame.Rect(mx + pad, my + 122, self.W - pad * 2, self.H - 122 - pad)
 
     # ── data ───────────────────────────────────────────────────────────────────
@@ -365,25 +369,35 @@ class AdminModal:
     def _fetch_data(self):
         try:
             import DataSeverConfig as db
-            self._users_all = db.admin_get_users()
-            self._messages  = db.admin_get_messages(100)
+            self._users_all    = db.admin_get_users()
+            self._messages_all = db.admin_get_messages(200)
+            self._deleted_msgs = db.admin_get_deleted_messages(200)
         except Exception:
-            self._users_all = []
-            self._messages  = []
-        self._apply_search()
+            self._users_all    = []
+            self._messages_all = []
+            self._deleted_msgs = []
+        self._apply_search_user()
+        self._apply_search_msg()
         self._loading = False
 
-    def _apply_search(self):
-        q = self._search_text.strip().lower()
-        if not q:
-            self._users = list(self._users_all)
-        else:
-            self._users = [
-                u for u in self._users_all
-                if q in u.get('username', '').lower()
-                or q in (u.get('email') or '').lower()
-            ]
+    def _apply_search_user(self):
+        q = self._search_user.strip().lower()
+        self._users = [
+            u for u in self._users_all
+            if not q or q in u.get('username', '').lower() or q in (u.get('email') or '').lower()
+        ]
         self._scroll_u = 0
+
+    def _apply_search_msg(self):
+        q = self._search_msg.strip().lower()
+        self._messages = [
+            m for m in self._messages_all
+            if not q
+            or q in (m.get('from_user') or '').lower()
+            or q in (m.get('to_user') or '').lower()
+            or q in (m.get('content') or '').lower()
+        ]
+        self._scroll_m = 0
 
     # ── run ────────────────────────────────────────────────────────────────────
 
@@ -409,19 +423,29 @@ class AdminModal:
             if event.key == pygame.K_ESCAPE:
                 self._result = None
                 return
-            if self._search_focus and self._tab == 'users':
+            # search input
+            if self._search_focus == 'user' and self._tab == 'users':
                 if event.key == pygame.K_BACKSPACE:
-                    self._search_text = self._search_text[:-1]
-                elif event.unicode and len(self._search_text) < 40:
-                    self._search_text += event.unicode
-                self._apply_search()
+                    self._search_user = self._search_user[:-1]
+                elif event.unicode and len(self._search_user) < 40:
+                    self._search_user += event.unicode
+                self._apply_search_user()
+                return
+            if self._search_focus == 'msg' and self._tab == 'messages':
+                if event.key == pygame.K_BACKSPACE:
+                    self._search_msg = self._search_msg[:-1]
+                elif event.unicode and len(self._search_msg) < 40:
+                    self._search_msg += event.unicode
+                self._apply_search_msg()
                 return
 
         if event.type == pygame.MOUSEWHEEL:
             if self._tab == 'users':
                 self._scroll_u = max(0, self._scroll_u - event.y * 3)
-            else:
+            elif self._tab == 'messages':
                 self._scroll_m = max(0, self._scroll_m - event.y * 3)
+            else:
+                self._scroll_d = max(0, self._scroll_d - event.y * 3)
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             pos = event.pos
@@ -435,18 +459,23 @@ class AdminModal:
                 self._tab = 'users'; return
             if self.tab_msgs_rect.collidepoint(pos):
                 self._tab = 'messages'; return
+            if self.tab_deleted_rect.collidepoint(pos):
+                self._tab = 'deleted'; return
 
             # search bar focus
-            if self._tab == 'users' and self.search_rect.collidepoint(pos):
-                self._search_focus = True
+            if self.search_rect.collidepoint(pos):
+                if self._tab == 'users':
+                    self._search_focus = 'user'
+                elif self._tab == 'messages':
+                    self._search_focus = 'msg'
                 return
             else:
-                self._search_focus = False
+                self._search_focus = None
 
             if self.list_rect.collidepoint(pos):
                 if self._tab == 'users':
                     self._handle_user_click(pos)
-                else:
+                elif self._tab == 'messages':
                     self._handle_msg_click(pos)
 
     def _handle_user_click(self, pos):
@@ -500,7 +529,7 @@ class AdminModal:
         if res.get('unban'):
             def _do_unban():
                 import DataSeverConfig as db
-                r = db.admin_set_role(uname, 'user')
+                r = db.admin_unban_user(uname)
                 if r.get('ok'):
                     u['role']      = 'user'
                     u['ban_until'] = None
@@ -551,7 +580,8 @@ class AdminModal:
             import DataSeverConfig as db
             res = db.admin_delete_message(mid)
             if res.get('ok'):
-                self._messages = [x for x in self._messages if x.get('id') != mid]
+                self._messages_all = [x for x in self._messages_all if x.get('id') != mid]
+                self._apply_search_msg()
                 self._show_msg('Da xoa tin nhan', True)
             else:
                 self._show_msg(res.get('error', 'Loi'), False)
@@ -617,8 +647,9 @@ class AdminModal:
 
         # tabs
         for tab_id, rect, label in [
-            ('users',    self.tab_users_rect, '👤  Tai khoan'),
-            ('messages', self.tab_msgs_rect,  '💬  Tin nhan'),
+            ('users',   self.tab_users_rect,   '👤  Tai khoan'),
+            ('messages',self.tab_msgs_rect,    '💬  Tin nhan'),
+            ('deleted', self.tab_deleted_rect, '🗑  Lich su xoa'),
         ]:
             r   = rect.move(dx, dy)
             act = (self._tab == tab_id)
@@ -629,15 +660,19 @@ class AdminModal:
             lbl = self.f_tab.render(label, True, tc)
             surface.blit(lbl, lbl.get_rect(center=r.center))
 
-        # search bar (tab users)
-        if self._tab == 'users':
+        # search bar (users & messages)
+        if self._tab in ('users', 'messages'):
             sr = self.search_rect.move(dx, dy)
-            bg = C_INPUT_FOCUS if self._search_focus else C_INPUT_BG
+            is_focus = (self._search_focus == 'user' and self._tab == 'users') or \
+                       (self._search_focus == 'msg'  and self._tab == 'messages')
+            bg = C_INPUT_FOCUS if is_focus else C_INPUT_BG
             pygame.draw.rect(surface, bg, sr, border_radius=8)
             pygame.draw.rect(surface, C_BORDER, sr, 1, border_radius=8)
-            placeholder = self._search_text or '🔍  Tim kiem username, email...'
-            tc = C_TEXT if self._search_text else C_TEXT_DIM
-            sl = self.f_row.render(placeholder[:50], True, tc)
+            cur_text = self._search_user if self._tab == 'users' else self._search_msg
+            placeholder = cur_text or ('🔍  Tim kiem username, email...' if self._tab == 'users'
+                                       else '🔍  Tim kiem ten, noi dung...')
+            tc = C_TEXT if cur_text else C_TEXT_DIM
+            sl = self.f_row.render(placeholder[:55], True, tc)
             surface.blit(sl, (sr.x + 8, sr.y + (sr.h - sl.get_height()) // 2))
 
         # list area clip
@@ -652,8 +687,10 @@ class AdminModal:
             surface.blit(lbl, lbl.get_rect(center=lr.center))
         elif self._tab == 'users':
             self._draw_users(surface, lr)
-        else:
+        elif self._tab == 'messages':
             self._draw_messages(surface, lr)
+        else:
+            self._draw_deleted(surface, lr)
 
         surface.set_clip(old_clip)
 
@@ -745,7 +782,7 @@ class AdminModal:
         ROW_H = 52
         hdr_y = lr.y + 4
         for text, x in [('Tu', lr.x + 8), ('Den', lr.x + 140),
-                         ('Noi dung', lr.x + 280), ('Thoi gian', lr.x + 500)]:
+                         ('Noi dung', lr.x + 280), ('Thoi gian (VN)', lr.x + 490)]:
             lbl = self.f_hdr.render(text, True, C_TEXT_DIM)
             surface.blit(lbl, (x, hdr_y))
         pygame.draw.line(surface, C_BORDER, (lr.x, hdr_y + 16), (lr.right, hdr_y + 16), 1)
@@ -771,20 +808,21 @@ class AdminModal:
             surface.blit(to_lbl, (lr.x + 140, cy - to_lbl.get_height() // 2))
 
             content = m.get('content', '')
-            if len(content) > 30:
-                l1 = self.f_small.render(content[:30], True, C_TEXT)
-                l2 = self.f_small.render(content[30:58] + ('...' if len(content) > 58 else ''), True, C_TEXT_DIM)
+            if len(content) > 28:
+                l1 = self.f_small.render(content[:28], True, C_TEXT)
+                l2 = self.f_small.render(content[28:54] + ('...' if len(content) > 54 else ''), True, C_TEXT_DIM)
                 surface.blit(l1, (lr.x + 280, ry + 8))
                 surface.blit(l2, (lr.x + 280, ry + 24))
             else:
                 cl = self.f_small.render(content, True, C_TEXT)
                 surface.blit(cl, (lr.x + 280, cy - cl.get_height() // 2))
 
-            sent = str(m.get('sent_at', ''))[:16]
-            tl   = self.f_small.render(sent, True, C_TEXT_DIM)
-            surface.blit(tl, (lr.x + 500, cy - tl.get_height() // 2))
+            # thời gian VN
+            sent_vn = _fmt_datetime_vn(m.get('sent_at'))
+            tl = self.f_small.render(sent_vn[:19], True, C_TEXT_DIM)
+            surface.blit(tl, (lr.x + 490, cy - tl.get_height() // 2))
 
-            del_btn = pygame.Rect(row.right - 80, ry + (ROW_H - 26) // 2, 70, 26)
+            del_btn = pygame.Rect(row.right - 76, ry + (ROW_H - 26) // 2, 70, 26)
             db_hov  = del_btn.collidepoint(mouse)
             db_bg   = C_DEL_HOV if db_hov else C_DEL_BG
             pygame.draw.rect(surface, db_bg, del_btn, border_radius=6)
@@ -794,5 +832,59 @@ class AdminModal:
         total_h = len(self._messages) * ROW_H
         self._scroll_m = min(self._scroll_m, max(0, total_h - (lr.h - 28)))
 
-        cnt = self.f_small.render(f'Tong: {len(self._messages)} tin nhan', True, C_TEXT_DIM)
+        cnt = self.f_small.render(
+            f'Tong: {len(self._messages)}/{len(self._messages_all)} tin nhan', True, C_TEXT_DIM)
+        surface.blit(cnt, (lr.x + 4, lr.bottom - 14))
+
+    def _draw_deleted(self, surface, lr):
+        """Tab lịch sử tin nhắn đã xóa."""
+        ROW_H = 52
+        hdr_y = lr.y + 4
+        for text, x in [('Tu', lr.x + 8), ('Den', lr.x + 130),
+                         ('Noi dung', lr.x + 260), ('Gui luc (VN)', lr.x + 450),
+                         ('Xoa luc (VN)', lr.x + 580)]:
+            lbl = self.f_hdr.render(text, True, C_TEXT_DIM)
+            surface.blit(lbl, (x, hdr_y))
+        pygame.draw.line(surface, C_BORDER, (lr.x, hdr_y + 16), (lr.right, hdr_y + 16), 1)
+
+        y0 = lr.y + 28 - self._scroll_d
+
+        for i, m in enumerate(self._deleted_msgs):
+            ry = y0 + i * ROW_H
+            if ry + ROW_H < lr.y or ry > lr.bottom:
+                continue
+
+            row = pygame.Rect(lr.x, ry, lr.w, ROW_H - 2)
+            bg  = C_ROW_ALT if i % 2 == 0 else C_PANEL
+            pygame.draw.rect(surface, bg, row, border_radius=4)
+
+            cy = ry + ROW_H // 2
+
+            from_lbl = self.f_row.render((m.get('from_user') or '')[:12], True, C_ACCENT)
+            surface.blit(from_lbl, (lr.x + 8, cy - from_lbl.get_height() // 2))
+
+            to_lbl = self.f_row.render((m.get('to_user') or '')[:12], True, C_TEXT_DIM)
+            surface.blit(to_lbl, (lr.x + 130, cy - to_lbl.get_height() // 2))
+
+            content = m.get('content', '')
+            if len(content) > 24:
+                l1 = self.f_small.render(content[:24], True, C_TEXT)
+                l2 = self.f_small.render(content[24:46] + ('...' if len(content) > 46 else ''), True, C_TEXT_DIM)
+                surface.blit(l1, (lr.x + 260, ry + 8))
+                surface.blit(l2, (lr.x + 260, ry + 24))
+            else:
+                cl = self.f_small.render(content, True, C_TEXT)
+                surface.blit(cl, (lr.x + 260, cy - cl.get_height() // 2))
+
+            sent_vn    = _fmt_datetime_vn(m.get('sent_at'))
+            deleted_vn = _fmt_datetime_vn(m.get('deleted_at'))
+            sl = self.f_small.render(sent_vn[:16],    True, C_TEXT_DIM)
+            dl = self.f_small.render(deleted_vn[:16], True, (200, 100, 100))
+            surface.blit(sl, (lr.x + 450, cy - sl.get_height() // 2))
+            surface.blit(dl, (lr.x + 580, cy - dl.get_height() // 2))
+
+        total_h = len(self._deleted_msgs) * ROW_H
+        self._scroll_d = min(self._scroll_d, max(0, total_h - (lr.h - 28)))
+
+        cnt = self.f_small.render(f'Tong: {len(self._deleted_msgs)} tin nhan da xoa', True, C_TEXT_DIM)
         surface.blit(cnt, (lr.x + 4, lr.bottom - 14))

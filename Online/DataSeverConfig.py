@@ -155,3 +155,11 @@ def admin_seed() -> dict:
 def admin_ban_user(username: str, ban_until=None) -> dict:
     """Ban user. ban_until=None → vĩnh viễn, ban_until=ISO string → có thời hạn."""
     return _post('/admin/ban', {'username': username, 'ban_until': ban_until})
+
+def admin_unban_user(username: str) -> dict:
+    """Gỡ ban: role='user', ban_until=NULL."""
+    return _post('/admin/unban', {'username': username})
+
+def admin_get_deleted_messages(limit: int = 100) -> list:
+    res = _get('/admin/deleted_messages', {'limit': limit})
+    return res.get('messages', []) if res.get('ok') else []
