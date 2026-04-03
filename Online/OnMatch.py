@@ -154,6 +154,27 @@ def _run_online_game(surface, screen_w, screen_h,
                          'Trang ♔' if my_color == 'white' else 'Den ♚')
 
     exit_signal = None
+    _match_saved = False   # tránh lưu 2 lần
+
+    def _save_match(result: str):
+        """Lưu kết quả trận vào database. result: 'win'|'loss'|'draw'"""
+        nonlocal _match_saved
+        if _match_saved:
+            return
+        _match_saved = True
+        try:
+            import DataSeverConfig as _db
+            user = _db.get_user(username)
+            if user and user.get('id'):
+                _db.add_match(
+                    user_id  = user['id'],
+                    opponent = opponent,
+                    result   = result,
+                    color    = my_color,
+                    moves    = len(board.move_log),
+                )
+        except Exception:
+            pass
 
     while True:
         now_player = game.next_player
@@ -188,8 +209,9 @@ def _run_online_game(surface, screen_w, screen_h,
         if opponent_disconnected and not game.is_over:
             game._trigger_alert(f'{opponent} da thoat! Ban thang!', (72, 199, 142))
             game.winner      = my_color
-            game.game_result = 1   # RESULT_CHECKMATE (dùng lại để show gameover)
+            game.game_result = 1
             game.in_check    = False
+            _save_match('win')
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -205,6 +227,7 @@ def _run_online_game(surface, screen_w, screen_h,
                     from OutModal import OutModal
                     choice = OutModal(screen_w, screen_h).run(surface)
                     if choice == 'quit':
+                        _save_match('loss')
                         client.emit('game_over', {'pin': pin, 'result': 'disconnect'})
                         client.disconnect()
                         exit_signal = 'menu'
@@ -213,6 +236,13 @@ def _run_online_game(surface, screen_w, screen_h,
 
             if game.is_over:
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    # lưu lịch sử khi game kết thúc bình thường
+                    if game.winner == my_color:
+                        _save_match('win')
+                    elif game.winner is None:
+                        _save_match('draw')
+                    else:
+                        _save_match('loss')
                     client.disconnect(); exit_signal = 'menu'; break
                 continue
 
@@ -261,6 +291,15 @@ def _run_online_game(surface, screen_w, screen_h,
 
         if exit_signal:
             break
+
+        # lưu lịch sử ngay khi game kết thúc (không chờ click)
+        if game.is_over and not _match_saved:
+            if game.winner == my_color:
+                _save_match('win')
+            elif game.winner is None:
+                _save_match('draw')
+            else:
+                _save_match('loss')
 
         surface.fill((18, 18, 30))
         flip = (my_color == 'black')
