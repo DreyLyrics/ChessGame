@@ -364,6 +364,7 @@ class Game:
         elif self.in_check:
             pn = 'Trang' if color == 'white' else 'Den'
             self._trigger_alert(f'! {pn} dang bi chieu !', COLOR_CHECK)
+            self.play_check_sound()
 
     def next_turn(self):
         self.next_player = 'white' if self.next_player == 'black' else 'black'
@@ -381,6 +382,12 @@ class Game:
             self.config.capture_sound.play()
         else:
             self.config.move_sound.play()
+
+    def play_check_sound(self):
+        try:
+            self.config.check_sound.play()
+        except Exception:
+            pass
 
     def play_result_sound(self, winner_color: str, my_color: str = None):
         """
