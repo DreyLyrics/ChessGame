@@ -493,7 +493,7 @@ def get_all_users() -> list:
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                'SELECT id, username, email, display_name, wins, losses, draws, role, created_at '
+                'SELECT id, username, email, display_name, wins, losses, draws, role, ban_until, created_at '
                 'FROM users ORDER BY created_at DESC'
             )
             rows = cur.fetchall()
