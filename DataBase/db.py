@@ -62,11 +62,17 @@ def init_db():
                     created_at    TIMESTAMP DEFAULT NOW()
                 )
             ''')
-            # migration: thêm cột nếu chưa có
-            cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='users'")
-            user_cols = [r[0] for r in cur.fetchall()]
+            # migration: thêm cột nếu chưa có + fix enum → text
+            cur.execute("SELECT column_name, data_type, udt_name FROM information_schema.columns WHERE table_name='users'")
+            user_col_info = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+            user_cols = list(user_col_info.keys())
             if user_cols and 'role' not in user_cols:
                 cur.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
+            elif 'role' in user_col_info:
+                dtype, udt = user_col_info['role']
+                # Nếu role là enum type, convert sang TEXT
+                if dtype == 'USER-DEFINED' or udt not in ('text', 'varchar'):
+                    cur.execute("ALTER TABLE users ALTER COLUMN role TYPE TEXT USING role::TEXT")
             if user_cols and 'ban_until' not in user_cols:
                 cur.execute("ALTER TABLE users ADD COLUMN ban_until TIMESTAMP DEFAULT NULL")
             cur.execute('''
